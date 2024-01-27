@@ -19,7 +19,7 @@ public partial class DataPack : Asset
         return new Godot.Collections.Array<Variant>();
     }
 
-    virtual public Node3D BuildGDLevel(string levelId, Godot.Collections.Dictionary<string, Variant> renderSettings, Godot.Collections.Array<Asset> files)
+    virtual public Node3D BuildGDLevel(string levelId, string shading, Godot.Collections.Array<Asset> files)
     {
         return new Node3D();
     }

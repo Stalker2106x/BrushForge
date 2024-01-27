@@ -1,10 +1,13 @@
 extends Node3D
+class_name Beam
+
+var enabled;
 
 var targetName;
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
-    pass # Replace with function body.
+    enabled = false;
 
 func configure(origin : Vector3, targetName_ : String):
     set_position(origin);
@@ -13,7 +16,7 @@ func configure(origin : Vector3, targetName_ : String):
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta):
     var path = get_node("/root/App/Layout/CenterLayout/Main/3DView/Viewport/World/Container/Map/Paths/%s/Wagon" % targetName);
-    if path:
+    if enabled && path:
         line(get_position(), path.get_position());
 
 func line(pos1: Vector3, pos2: Vector3, color = Color.RED):

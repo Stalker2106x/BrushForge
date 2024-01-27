@@ -2,7 +2,8 @@ extends Control
 
 const CameraPrefab = preload("res://prefabs/Camera.tscn");
 
-var renderSettings;
+var settings;
+var shading;
 var camera;
 var worldContainer;
 
@@ -11,25 +12,34 @@ var currentLevelFile;
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
-    renderSettings = {
-        "skybox": false,
-        "lights": true,
-        "pointEntities": true,
-        "modelEntities": true,
-        "playAudio": true,
-        "shading": "texturized",
-        "collisions": true
+    shading = "texturized";
+    settings = {
+        "render": {
+            "skybox": false,
+            "lights": true,
+            "pointEntities": true,
+            "modelEntities": true,
+            "beams": true
+        },
+        "entities": {
+            "playAudio": true,
+            "runFuncTrain": true
+        },
+        "camera": {
+            "collisions": false,
+            "gravity": false
+        }
     };
-    get_node("../Top/TitleBar/").setButtonStates(renderSettings);
+    get_node("../Top/TitleBar/").setButtonStates(settings);
     # Nodes
     worldContainer = get_node("Viewport/World/Container");
     camera = get_node("Viewport/World/Camera");
     get_node("Viewport").connect("gui_input", Callable(self, "viewInput"));
     # Toolbar
     var sidebar = get_node("Sidebar/TopRight/Shading");
-    sidebar.get_node("WireframeBtn").connect("pressed", Callable(self, "setRenderSetting").bind("shading", "wireframe"));
-    sidebar.get_node("ShadedBtn").connect("pressed", Callable(self, "setRenderSetting").bind("shading", "shaded"));
-    sidebar.get_node("TexturizedBtn").connect("pressed", Callable(self, "setRenderSetting").bind("shading", "texturized"));
+    sidebar.get_node("WireframeBtn").connect("pressed", Callable(self, "setShading").bind("wireframe"));
+    sidebar.get_node("ShadedBtn").connect("pressed", Callable(self, "setShading").bind("shaded"));
+    sidebar.get_node("TexturizedBtn").connect("pressed", Callable(self, "setShading").bind("texturized"));
 
 func _input(event):
     if event.is_action_pressed("Escape"):
@@ -50,19 +60,20 @@ func setMouseCapture(enabled):
     else:
         Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE);
 
-func setRenderSetting(key, value):
-    if renderSettings[key] == value:
+func setSetting(section, key, value):
+    if settings[section][key] == value:
         return; #Already set
-    renderSettings[key] = value;
-    if key == "shading":
-        reloadLevel();
-    else:
-        applyRenderSettings();
+    settings[section][key] = value;
+    applySettings();
     
-func applyRenderSettings():
-    get_node("Viewport/World/Container/Map/Skybox").visible = !renderSettings.skybox;
+func setShading(shading_):
+    shading = shading_;
+    reloadLevel();
+
+func applySettings():
+    get_node("Viewport/World/Container/Map/Skybox").visible = !settings.render.skybox;
     var skyMat = camera.get_node("Camera").environment.sky.sky_material;
-    if renderSettings.skybox:
+    if settings.render.skybox:
         var files = get_node("/root/App").files;
         var cubemapTextures = currentLevelFile.GetSkyCubemapTextures(files);
         skyMat.set_shader_parameter("front", cubemapTextures[0]);
@@ -82,10 +93,15 @@ func applyRenderSettings():
     for entity in get_node("Viewport/World/Container/Map/PointEntities").get_children():
         for child in entity.get_children():
             if child is OmniLight3D:
-                child.visible = renderSettings.lights;
-    get_node("Viewport/World/Container/Map/PointEntities").visible = renderSettings.pointEntities;
-    get_node("Viewport/World/Container/Map/ModelEntities").visible = renderSettings.modelEntities;
-    camera.get_node("CameraCollider").disabled = !renderSettings.collisions;
+                child.visible = settings.render.lights;
+            if child is Beam:
+                child.enabled = settings.render.beams;
+    for path in get_node("Viewport/World/Container/Map/Paths").get_children():
+        path.get_node("Wagon").enabled = settings.entities.runFuncTrain;
+    get_node("Viewport/World/Container/Map/PointEntities").visible = settings.render.pointEntities;
+    get_node("Viewport/World/Container/Map/ModelEntities").visible = settings.render.modelEntities;
+    camera.get_node("CameraCollider").disabled = !settings.camera.collisions;
+    camera.gravity = settings.camera.gravity;
 
 func hasLevelLoaded():
     return worldContainer.get_child_count() > 0;
@@ -99,9 +115,9 @@ func reloadLevel():
     if hasLevelLoaded():
         unload();
     var files = get_node("/root/App").files;
-    var mapNode = currentLevelFile.BuildGDLevel("", renderSettings, files);
+    var mapNode = currentLevelFile.BuildGDLevel("", shading, files);
     worldContainer.add_child(mapNode);
-    applyRenderSettings();
+    applySettings();
     #get_node("Viewport/World/VoxelGI").bake(get_node("Viewport/World/Container"));
 
 func unload(clearCache = false):

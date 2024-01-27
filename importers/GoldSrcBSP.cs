@@ -310,7 +310,7 @@ public partial class GoldSrcBSP : DataPack
         return cubemapTextures;
     }
 
-    override public Node3D BuildGDLevel(string levelId, Godot.Collections.Dictionary<string, Variant> renderSettings, Godot.Collections.Array<Asset> files)
+    override public Node3D BuildGDLevel(string levelId, string shading, Godot.Collections.Array<Asset> files)
     {
         Material NotFoundMaterial = GD.Load<StandardMaterial3D>("res://materials/NotfoundMaterial.tres");
         // Level
@@ -337,7 +337,7 @@ public partial class GoldSrcBSP : DataPack
                 } else {
                     // Create faces materials
                     Material material = null;
-                    if ((string)renderSettings["shading"] == "texturized") {
+                    if (shading == "texturized") {
                         material = new StandardMaterial3D();
                         (material as StandardMaterial3D).TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest;
                         for (int fileId = 0; fileId < files.Count; fileId++) {
@@ -359,10 +359,10 @@ public partial class GoldSrcBSP : DataPack
                                 (material as StandardMaterial3D).EmissionEnergyMultiplier = 1.0f;
                             }
                         }
-                    } else if ((string)renderSettings["shading"] == "shaded") {
+                    } else if (shading == "shaded") {
                         material = new StandardMaterial3D();
                         (material as StandardMaterial3D).AlbedoColor = new Color((float)GD.RandRange(0.0, 1.0), (float)GD.RandRange(0.0, 1.0), (float)GD.RandRange(0.0, 1.0));
-                    } else if ((string)renderSettings["shading"] == "wireframe") {
+                    } else if (shading == "wireframe") {
                         material = GD.Load<ShaderMaterial>("res://materials/WireframeMaterial.tres");
                     }
                     surfaceTool = new SurfaceTool();
@@ -553,13 +553,20 @@ public partial class GoldSrcBSP : DataPack
                 // Entity is not a point
                 else if (entity.ContainsKey("MODEL") && entity["MODEL"].StartsWith("*"))
                 {
-                    entityNode = mapNode.GetNode("Model" + entity["MODEL"].Replace("*", "")) as Node3D;
-                    // Transfer to modelEntities
-                    mapNode.RemoveChild(entityNode);
-                    modelEntitiesNode.AddChild(entityNode);
-                    // Set alpha
-                    if (entity["CLASSNAME"] != "FUNC_BREAKABLE")
+                    string modelName = "Model" + entity["MODEL"].Replace("*", "");
+                    entityNode = mapNode.GetNode(modelName) as Node3D;
+                    // Set entity as area (non-block)
+                    if (true) // was entity["CLASSNAME"] != "FUNC_BREAKABLE", removed to be able to go through
                     {
+                        Area3D replaceNode = new Area3D();
+                        replaceNode.Name = modelName;
+                        foreach (Node3D eChild in entityNode.GetChildren())
+                        {
+                            entityNode.RemoveChild(eChild);
+                            replaceNode.AddChild(eChild);
+                        }
+                        entityNode.QueueFree(); // Release unnecessary rigidbody
+                        entityNode = replaceNode;
                         MeshInstance3D modelMesh = entityNode.GetNode("Mesh") as MeshInstance3D;
                         int surfaceCount = modelMesh.GetSurfaceOverrideMaterialCount();
                         for (int surface = 0; surface < surfaceCount; surface++)
@@ -571,11 +578,24 @@ public partial class GoldSrcBSP : DataPack
                             modelMesh.SetSurfaceOverrideMaterial(surface, originalMat);
                         }
                     }
-                    // Set as entity
-                    entityNode.SetScript(GD.Load<Script>("res://scripts/Entity.gd"));
-                    Label3D identifierLabel = new Label3D();
-                    identifierLabel.Name = "IdentifierLabel";
-                    entityNode.AddChild(identifierLabel);
+                    // Transfer to modelEntities
+                    modelEntitiesNode.AddChild(entityNode);
+                    // Set entity type
+                    if (entity["CLASSNAME"] == "FUNC_DOOR")
+                    {
+                        entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
+                        entityNode.Call("configureDoor", 1.0f);
+                    }
+                    else if (entity["CLASSNAME"] == "FUNC_BUTTON")
+                    {
+                        entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
+                        entityNode.Call("configureButton", 1.0f);
+                    }
+                    else
+                    {
+                        entityNode.SetScript(GD.Load<Script>("res://scripts/Entity.gd"));
+                    }
+                    // Configure base entity class
                     entityNode.Call("configure", "model", (string)entity["CLASSNAME"], entity, "");
                 }
             }

@@ -1,4 +1,4 @@
-extends Node
+extends Node3D
 class_name Entity
 
 var type;
@@ -17,3 +17,6 @@ func configure(type_ : String, identifier_ : String, data_ : Dictionary, customT
                 if file.gdTextures.has(customTextureName):
                     get_node("Gizmo/Icon").set_texture(file.gdTextures[customTextureName]);
                     break;
+
+func use():
+    pass;

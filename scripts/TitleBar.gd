@@ -6,6 +6,8 @@ var fileDropdown;
 var viewDropdown;
 var aboutDropdown;
 
+var settingsMap;
+
 # Called when the node enters the scene tree for the first time.
 func _ready():
     view3D = get_node("../../3DView");
@@ -17,12 +19,18 @@ func _ready():
     aboutDropdown = get_node("About");
     aboutDropdown.connect("index_pressed", Callable(self, "aboutButtonPressed"));
 
-func setButtonStates(renderSettings):
-    viewDropdown.set_item_checked(0, renderSettings.skybox);
-    viewDropdown.set_item_checked(1, renderSettings.lights);
-    viewDropdown.set_item_checked(2, renderSettings.pointEntities);
-    viewDropdown.set_item_checked(3, renderSettings.modelEntities);
-    viewDropdown.set_item_checked(4, renderSettings.collisions);
+func setButtonStates(settings):
+    settingsMap = {};
+    var itemId = 0;
+    for section in settings.keys():
+        viewDropdown.add_separator(section, itemId);
+        itemId += 1;
+        for param in settings[section].keys():
+            settingsMap[itemId] = "%s;%s" % [section, param];
+            viewDropdown.add_item(param, itemId);
+            viewDropdown.set_item_as_checkable(itemId, true);
+            viewDropdown.set_item_checked(itemId, settings[section][param]);
+            itemId += 1;
 
 func fileButtonPressed(idx):
     if idx == 0:
@@ -32,16 +40,8 @@ func fileButtonPressed(idx):
 
 func viewButtonPressed(idx):
     var enabled = !viewDropdown.is_item_checked(idx)
-    if idx == 0: #Sky
-        view3D.setRenderSetting("skybox", enabled);
-    elif idx == 1: #Lights
-        view3D.setRenderSetting("lights", enabled);
-    elif idx == 2: #PointEntities
-        view3D.setRenderSetting("pointEntities", enabled);
-    elif idx == 3: #ModelEntities
-        view3D.setRenderSetting("modelEntities", enabled);
-    elif idx == 4: #Collisions
-        view3D.setRenderSetting("collisions", enabled);
+    var keys = settingsMap[idx].split(";");
+    view3D.setSetting(keys[0], keys[1], enabled);
     viewDropdown.set_item_checked(idx, enabled);
 
 func aboutButtonPressed(idx):
