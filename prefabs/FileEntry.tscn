@@ -1,0 +1,30 @@
+[gd_scene load_steps=3 format=3 uid="uid://ceamsiabtfrrj"]
+
+[ext_resource type="Script" path="res://scripts/FileEntry.gd" id="1_8xsrh"]
+[ext_resource type="Texture2D" uid="uid://gjokmul31vf8" path="res://assets/trash.png" id="1_hl1d1"]
+
+[node name="WadEntry" type="HBoxContainer"]
+offset_right = 214.0
+offset_bottom = 58.0
+size_flags_horizontal = 3
+alignment = 2
+script = ExtResource("1_8xsrh")
+
+[node name="Data" type="VBoxContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+
+[node name="FilenameLabel" type="Label" parent="Data"]
+layout_mode = 2
+text = "Example.ext"
+horizontal_alignment = 1
+
+[node name="BrowseButton" type="Button" parent="Data"]
+layout_mode = 2
+text = "Browse Content"
+
+[node name="RemoveButton" type="Button" parent="."]
+layout_mode = 2
+theme_override_constants/icon_max_width = 30
+icon = ExtResource("1_hl1d1")

@@ -1,0 +1,116 @@
+[gd_scene load_steps=5 format=3 uid="uid://ndjisg7fxapk"]
+
+[ext_resource type="Script" path="res://scripts/FileContentDialog.gd" id="1_3tbva"]
+[ext_resource type="Script" path="res://scripts/ResponsiveGrid.gd" id="2_mnlux"]
+[ext_resource type="Script" path="res://prefabs/ModelViewer.gd" id="3_b8643"]
+
+[sub_resource type="Environment" id="Environment_llhxh"]
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+
+[node name="FileContentDialog" type="Window"]
+title = "File Content"
+initial_position = 2
+size = Vector2i(800, 600)
+exclusive = true
+script = ExtResource("1_3tbva")
+
+[node name="Layout" type="VBoxContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TabContainer" type="TabContainer" parent="Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+current_tab = 3
+
+[node name="Levels" type="VBoxContainer" parent="Layout/TabContainer"]
+visible = false
+layout_mode = 2
+
+[node name="Textures" type="VBoxContainer" parent="Layout/TabContainer"]
+visible = false
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Layout/TabContainer/Textures"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="TextureList" type="GridContainer" parent="Layout/TabContainer/Textures/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 0
+theme_override_constants/v_separation = 0
+script = ExtResource("2_mnlux")
+
+[node name="Info" type="Label" parent="Layout/TabContainer/Textures"]
+layout_mode = 2
+size_flags_vertical = 8
+text = "0 Textures found"
+horizontal_alignment = 2
+
+[node name="Sounds" type="VBoxContainer" parent="Layout/TabContainer"]
+visible = false
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Layout/TabContainer/Sounds"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="SoundsList" type="VBoxContainer" parent="Layout/TabContainer/Sounds/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Layout/TabContainer/Sounds"]
+layout_mode = 2
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="Layout/TabContainer/Sounds/VBoxContainer"]
+
+[node name="SoundProgress" type="HSlider" parent="Layout/TabContainer/Sounds/VBoxContainer"]
+layout_mode = 2
+max_value = 20.0
+
+[node name="PlayButton" type="Button" parent="Layout/TabContainer/Sounds/VBoxContainer"]
+layout_mode = 2
+text = "|"
+
+[node name="Model" type="HSplitContainer" parent="Layout/TabContainer"]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Layout/TabContainer/Model"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="AnimationsList" type="VBoxContainer" parent="Layout/TabContainer/Model/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="Layout/TabContainer/Model"]
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("3_b8643")
+
+[node name="SubViewport" type="SubViewport" parent="Layout/TabContainer/Model/SubViewportContainer"]
+own_world_3d = true
+handle_input_locally = false
+render_target_update_mode = 4
+
+[node name="Camera3D" type="Camera3D" parent="Layout/TabContainer/Model/SubViewportContainer/SubViewport"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.5)
+environment = SubResource("Environment_llhxh")
+current = true
+
+[node name="Container" type="Node3D" parent="Layout/TabContainer/Model/SubViewportContainer/SubViewport"]
+
+[node name="HSplitContainer" type="HSplitContainer" parent="Layout/TabContainer/Model"]
+layout_mode = 2

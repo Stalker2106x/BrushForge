@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://e0uroyr6tr08"]
+
+[node name="WADTextureEntry" type="VBoxContainer"]
+
+[node name="PlayButton" type="Button" parent="."]
+layout_mode = 2
+text = "Load"
+
+[node name="SoundName" type="Label" parent="."]
+layout_mode = 2
+text = "TEXTURE"
+horizontal_alignment = 1

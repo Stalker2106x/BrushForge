@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://by55h6m7ulmcd"]
+
+[ext_resource type="Script" path="res://scripts/Beam.gd" id="1_fikc8"]
+
+[node name="Beam" type="Node3D"]
+script = ExtResource("1_fikc8")

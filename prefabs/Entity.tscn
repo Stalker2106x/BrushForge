@@ -1,0 +1,30 @@
+[gd_scene load_steps=4 format=3 uid="uid://bhr3iqpdmtb75"]
+
+[ext_resource type="Script" path="res://scripts/Entity.gd" id="1_1s1pv"]
+[ext_resource type="Texture2D" uid="uid://dep7gp2h777g" path="res://assets/Entity.png" id="2_44iik"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_7xwuv"]
+radius = 0.4
+
+[node name="Entity" type="StaticBody3D"]
+collision_layer = 2
+collision_mask = 2
+script = ExtResource("1_1s1pv")
+
+[node name="Gizmo" type="Node3D" parent="."]
+
+[node name="Icon" type="Sprite3D" parent="Gizmo"]
+pixel_size = 0.005
+billboard = 1
+texture = ExtResource("2_44iik")
+
+[node name="IdentifierLabel" type="Label3D" parent="Gizmo"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.355304, 0)
+layers = 2
+pixel_size = 0.003
+billboard = 1
+outline_modulate = Color(0.360784, 0.360784, 0.360784, 1)
+text = "EXAMPLE"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_7xwuv")

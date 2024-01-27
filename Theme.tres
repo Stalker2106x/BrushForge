@@ -1,0 +1,11 @@
+[gd_resource type="Theme" load_steps=3 format=3 uid="uid://dnjcqtp4bxqiq"]
+
+[ext_resource type="FontFile" uid="uid://ber657j8alruy" path="res://fonts/Verdana.ttf" id="1_l86yu"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_6bg1w"]
+
+[resource]
+Button/fonts/font = ExtResource("1_l86yu")
+Button/styles/focus = SubResource("StyleBoxEmpty_6bg1w")
+Label/fonts/font = ExtResource("1_l86yu")
+RichTextLabel/fonts/normal_font = ExtResource("1_l86yu")
