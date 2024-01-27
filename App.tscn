@@ -1,0 +1,391 @@
+[gd_scene load_steps=20 format=3 uid="uid://c311sqhtsypw0"]
+
+[ext_resource type="Theme" uid="uid://dnjcqtp4bxqiq" path="res://Theme.tres" id="1_txdw7"]
+[ext_resource type="Script" path="res://scripts/App.gd" id="1_w7gbj"]
+[ext_resource type="Script" path="res://scripts/TitleBar.gd" id="3_1oohy"]
+[ext_resource type="Script" path="res://scripts/3DView.gd" id="4_r574j"]
+[ext_resource type="PackedScene" uid="uid://bqe5vceku10ff" path="res://prefabs/Camera.tscn" id="5_4mito"]
+[ext_resource type="Script" path="res://scripts/TexturePanel.gd" id="5_qwuqx"]
+[ext_resource type="Script" path="res://scripts/TansformGizmo.gd" id="6_4186l"]
+[ext_resource type="Texture2D" uid="uid://c3l2jlbt4fvbm" path="res://assets/Wireframe.png" id="7_w2248"]
+[ext_resource type="Texture2D" uid="uid://xiffgpg61xpa" path="res://assets/Shaded.png" id="8_rngdq"]
+[ext_resource type="Texture2D" uid="uid://d3xhssevy46uo" path="res://assets/Texturized.png" id="9_6ln17"]
+[ext_resource type="PackedScene" uid="uid://bgtnn8txh3vbj" path="res://models/Transform.blend" id="10_p7x03"]
+[ext_resource type="Texture2D" uid="uid://d3claeraj5wk4" path="res://assets/crosshair.png" id="11_862x4"]
+[ext_resource type="Script" path="res://scripts/Inspector.gd" id="13_ortvp"]
+[ext_resource type="Texture2D" uid="uid://ct6krfvslra0v" path="res://assets/BrushForgeFull.png" id="14_eu4wb"]
+[ext_resource type="PackedScene" uid="uid://ndjisg7fxapk" path="res://prefabs/FileContentDialog.tscn" id="16_rmtiy"]
+[ext_resource type="Script" path="res://scripts/InfoOverlay.gd" id="17_o6b1d"]
+[ext_resource type="Material" uid="uid://cecp5bew21qdw" path="res://materials/CubemapMaterial.tres" id="18_vri0h"]
+
+[sub_resource type="VoxelGIData" id="VoxelGIData_eon4g"]
+energy = 0.0
+use_two_bounces = false
+interior = true
+
+[sub_resource type="Environment" id="Environment_p5trv"]
+background_color = Color(1, 1, 1, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+
+[node name="App" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_txdw7")
+script = ExtResource("1_w7gbj")
+
+[node name="BG" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.192157, 0.192157, 0.192157, 1)
+
+[node name="Layout" type="VSplitContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CenterLayout" type="HSplitContainer" parent="Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Main" type="VBoxContainer" parent="Layout/CenterLayout"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Top" type="HBoxContainer" parent="Layout/CenterLayout/Main"]
+layout_mode = 2
+
+[node name="TitleBar" type="MenuBar" parent="Layout/CenterLayout/Main/Top"]
+layout_mode = 2
+flat = true
+script = ExtResource("3_1oohy")
+
+[node name="File" type="PopupMenu" parent="Layout/CenterLayout/Main/Top/TitleBar"]
+item_count = 2
+item_0/text = "Import File(s)..."
+item_0/id = 0
+item_1/text = "Import Folder..."
+item_1/id = 1
+
+[node name="View" type="PopupMenu" parent="Layout/CenterLayout/Main/Top/TitleBar"]
+item_count = 5
+item_0/text = "Render Skybox"
+item_0/checkable = 1
+item_0/id = 2
+item_1/text = "Render Lights"
+item_1/checkable = 1
+item_1/id = 1
+item_2/text = "Show Point Entities"
+item_2/checkable = 1
+item_2/id = 0
+item_3/text = "Show Model Entities"
+item_3/checkable = 1
+item_3/id = 3
+item_4/text = "Collide with world"
+item_4/id = 4
+
+[node name="About" type="PopupMenu" parent="Layout/CenterLayout/Main/Top/TitleBar"]
+item_count = 1
+item_0/text = "BrushForge"
+item_0/id = 0
+
+[node name="Control" type="Control" parent="Layout/CenterLayout/Main/Top"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="Layout/CenterLayout/Main/Top"]
+layout_mode = 2
+text = "3D View Level:"
+
+[node name="LevelSelect" type="OptionButton" parent="Layout/CenterLayout/Main/Top"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+
+[node name="3DView" type="Control" parent="Layout/CenterLayout/Main"]
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("4_r574j")
+
+[node name="Viewport" type="SubViewportContainer" parent="Layout/CenterLayout/Main/3DView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 1.0
+offset_top = 1.0
+offset_right = 1.0
+offset_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+stretch = true
+
+[node name="World" type="SubViewport" parent="Layout/CenterLayout/Main/3DView/Viewport"]
+handle_input_locally = false
+audio_listener_enable_2d = true
+audio_listener_enable_3d = true
+size = Vector2i(968, 593)
+render_target_update_mode = 4
+
+[node name="Camera" parent="Layout/CenterLayout/Main/3DView/Viewport/World" instance=ExtResource("5_4mito")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -33.75, 0.75, -5.5)
+
+[node name="Container" type="Node3D" parent="Layout/CenterLayout/Main/3DView/Viewport/World"]
+
+[node name="VoxelGI" type="VoxelGI" parent="Layout/CenterLayout/Main/3DView/Viewport/World"]
+size = Vector3(200, 200, 200)
+data = SubResource("VoxelGIData_eon4g")
+
+[node name="Sidebar" type="VBoxContainer" parent="Layout/CenterLayout/Main/3DView"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="TopRight" type="HBoxContainer" parent="Layout/CenterLayout/Main/3DView/Sidebar"]
+layout_mode = 2
+alignment = 2
+
+[node name="TansformGizmo" type="SubViewportContainer" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight"]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
+size_flags_horizontal = 8
+stretch = true
+script = ExtResource("6_4186l")
+
+[node name="World" type="SubViewport" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/TansformGizmo"]
+own_world_3d = true
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(100, 100)
+render_target_update_mode = 4
+
+[node name="Gizmo" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/TansformGizmo/World" instance=ExtResource("10_p7x03")]
+
+[node name="Camera" type="Camera3D" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/TansformGizmo/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.85)
+environment = SubResource("Environment_p5trv")
+fov = 60.0
+
+[node name="Shading" type="VBoxContainer" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight"]
+layout_mode = 2
+
+[node name="WireframeBtn" type="TextureButton" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/Shading"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+size_flags_horizontal = 8
+texture_normal = ExtResource("7_w2248")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="ShadedBtn" type="TextureButton" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/Shading"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+size_flags_horizontal = 8
+texture_normal = ExtResource("8_rngdq")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="TexturizedBtn" type="TextureButton" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/Shading"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+size_flags_horizontal = 8
+texture_normal = ExtResource("9_6ln17")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Control" type="Control" parent="Layout/CenterLayout/Main/3DView/Sidebar"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CoordinatesLabel" type="Label" parent="Layout/CenterLayout/Main/3DView/Sidebar"]
+layout_mode = 2
+size_flags_horizontal = 8
+horizontal_alignment = 2
+
+[node name="Crosshair" type="TextureRect" parent="Layout/CenterLayout/Main/3DView"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -5.0
+offset_top = -5.5
+offset_right = 6.0
+offset_bottom = 5.5
+grow_horizontal = 2
+grow_vertical = 2
+pivot_offset = Vector2(5, 5)
+texture = ExtResource("11_862x4")
+stretch_mode = 3
+
+[node name="CubemapConverter" type="SubViewport" parent="Layout/CenterLayout/Main/3DView"]
+
+[node name="Canvas" type="ColorRect" parent="Layout/CenterLayout/Main/3DView/CubemapConverter"]
+material = ExtResource("18_vri0h")
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="TabContainer" type="TabContainer" parent="Layout/CenterLayout"]
+clip_contents = true
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+tab_alignment = 1
+current_tab = 1
+
+[node name="Level Textures" type="VBoxContainer" parent="Layout/CenterLayout/TabContainer"]
+visible = false
+layout_mode = 2
+script = ExtResource("5_qwuqx")
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Layout/CenterLayout/TabContainer/Level Textures"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="TextureList" type="VBoxContainer" parent="Layout/CenterLayout/TabContainer/Level Textures/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Files" type="VBoxContainer" parent="Layout/CenterLayout/TabContainer"]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Layout/CenterLayout/TabContainer/Files"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="FilesList" type="Tree" parent="Layout/CenterLayout/TabContainer/Files/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TabContainer" type="TabContainer" parent="Layout"]
+custom_minimum_size = Vector2(0, 160)
+layout_mode = 2
+
+[node name="Logs" type="ScrollContainer" parent="Layout/TabContainer"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+vertical_scroll_mode = 2
+
+[node name="LogLabel" type="RichTextLabel" parent="Layout/TabContainer/Logs"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+focus_mode = 2
+bbcode_enabled = true
+scroll_following = true
+selection_enabled = true
+deselect_on_focus_loss_enabled = false
+
+[node name="Inspector" type="ScrollContainer" parent="Layout/TabContainer"]
+visible = false
+layout_mode = 2
+script = ExtResource("13_ortvp")
+
+[node name="Layout" type="VBoxContainer" parent="Layout/TabContainer/Inspector"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="IdentifierLabel" type="Label" parent="Layout/TabContainer/Inspector/Layout"]
+layout_mode = 2
+
+[node name="DataLabel" type="RichTextLabel" parent="Layout/TabContainer/Inspector/Layout"]
+layout_mode = 2
+fit_content = true
+
+[node name="AboutDialog" type="Window" parent="."]
+title = "About BrushForge"
+initial_position = 2
+size = Vector2i(750, 350)
+visible = false
+exclusive = true
+unresizable = true
+always_on_top = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="AboutDialog"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TextureRect" type="TextureRect" parent="AboutDialog/VBoxContainer"]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+texture = ExtResource("14_eu4wb")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="RichTextLabel" type="RichTextLabel" parent="AboutDialog/VBoxContainer"]
+layout_mode = 2
+bbcode_enabled = true
+text = "[center]v1.0.0[/center]
+
+[center]BrushForge is a tool to preview various kind of Quake engine and derivates textures, game resources and levels.
+
+[rainbow freq=0.1 sat=0.8 val=0.8]Developed by Stalker2106[/rainbow][/center]"
+fit_content = true
+
+[node name="FileContentDialog" parent="." instance=ExtResource("16_rmtiy")]
+visible = false
+
+[node name="FileDialog" type="FileDialog" parent="."]
+title = "Open File(s)"
+initial_position = 2
+size = Vector2i(600, 400)
+always_on_top = true
+ok_button_text = "Ouvrir"
+file_mode = 1
+access = 2
+filters = PackedStringArray("*.bsp, *.wad, *.pk3", "*.spr, *.bmp, *.tga", "*.wav, *.mp3")
+use_native_dialog = true
+
+[node name="FolderDialog" type="FileDialog" parent="."]
+title = "Open a Directory"
+initial_position = 2
+size = Vector2i(600, 400)
+always_on_top = true
+ok_button_text = "Sélectionner le dossier courant"
+file_mode = 2
+access = 2
+filters = PackedStringArray("All Folders")
+use_native_dialog = true
+
+[node name="InfoOverlay" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 0
+offset_left = 972.0
+offset_top = 63.0
+offset_right = 1069.0
+offset_bottom = 92.0
+mouse_filter = 1
+script = ExtResource("17_o6b1d")
+
+[node name="Timer" type="Timer" parent="InfoOverlay"]
+one_shot = true
+
+[node name="Label" type="Label" parent="InfoOverlay"]
+layout_mode = 2
+mouse_filter = 1
+text = "Path/to/file"

@@ -1,0 +1,13 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://cecp5bew21qdw"]
+
+[ext_resource type="Shader" path="res://shaders/CubemapToEquirectangular.gdshader" id="1_w70j5"]
+[ext_resource type="Texture2D" uid="uid://dor552c3gmhi4" path="res://assets/blackpixel.png" id="2_y6vm3"]
+
+[resource]
+shader = ExtResource("1_w70j5")
+shader_parameter/front = ExtResource("2_y6vm3")
+shader_parameter/left = ExtResource("2_y6vm3")
+shader_parameter/right = ExtResource("2_y6vm3")
+shader_parameter/back = ExtResource("2_y6vm3")
+shader_parameter/top = ExtResource("2_y6vm3")
+shader_parameter/bottom = ExtResource("2_y6vm3")

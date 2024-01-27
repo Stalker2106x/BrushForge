@@ -1,0 +1,23 @@
+[gd_scene load_steps=2 format=3 uid="uid://bxvnmhwhgna3x"]
+
+[ext_resource type="Texture2D" uid="uid://cwygddmmj18jr" path="res://assets/Missing.png" id="1_a3hik"]
+
+[node name="TextureEntry" type="HBoxContainer"]
+
+[node name="Texture" type="TextureRect" parent="."]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+texture = ExtResource("1_a3hik")
+expand_mode = 2
+
+[node name="Data" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Data"]
+layout_mode = 2
+text = "TEXTURE"
+
+[node name="SourceLabel" type="Label" parent="Data"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.478431, 0.478431, 0.478431, 1)
+text = "Not found"

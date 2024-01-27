@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3 uid="uid://bqe5vceku10ff"]
+
+[ext_resource type="Script" path="res://scripts/Camera.gd" id="1_61b84"]
+[ext_resource type="Environment" uid="uid://btqxk6ycdwkac" path="res://CameraEnvironment.tres" id="2_7csqs"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_5fgvf"]
+radius = 0.570574
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_v0fw5"]
+
+[node name="Camera" type="CharacterBody3D"]
+collision_layer = 3
+collision_mask = 3
+motion_mode = 1
+script = ExtResource("1_61b84")
+
+[node name="Camera" type="Camera3D" parent="."]
+environment = ExtResource("2_7csqs")
+
+[node name="CameraCollider" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_5fgvf")
+
+[node name="HumanCollider" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.393168, 0)
+shape = SubResource("CapsuleShape3D_v0fw5")
+disabled = true

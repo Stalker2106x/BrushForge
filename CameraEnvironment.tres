@@ -1,0 +1,19 @@
+[gd_resource type="Environment" load_steps=3 format=3 uid="uid://btqxk6ycdwkac"]
+
+[ext_resource type="Material" uid="uid://cecp5bew21qdw" path="res://materials/CubemapMaterial.tres" id="1_nryys"]
+
+[sub_resource type="Sky" id="Sky_31o67"]
+sky_material = ExtResource("1_nryys")
+
+[resource]
+background_mode = 2
+sky = SubResource("Sky_31o67")
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+ambient_light_energy = 0.1
+ssil_enabled = true
+sdfgi_read_sky_light = false
+sdfgi_bounce_feedback = 0.0
+sdfgi_min_cell_size = 0.02
+sdfgi_cascade0_distance = 1.28
+sdfgi_max_distance = 20.48
