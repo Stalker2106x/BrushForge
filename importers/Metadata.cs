@@ -115,6 +115,18 @@ public partial class Metadata : Node
                 asset.type = "Pack";
                 asset.format = "WAD3";
                 break;
+            case "IDST":
+                switch (version)
+                {
+                    case 10:
+                        asset = new MDL();
+                        SetMetadata(asset);
+                        asset.Import(fs, reader);
+                        asset.type = "Model";
+                        asset.format = "GoldSrc MDL";
+                        break;
+                }
+                break;
             case "IDSP":
                 switch (version)
                 {

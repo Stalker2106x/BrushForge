@@ -584,12 +584,12 @@ public partial class GoldSrcBSP : DataPack
                     if (entity["CLASSNAME"] == "FUNC_DOOR")
                     {
                         entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
-                        entityNode.Call("configureDoor", 1.0f);
+                        entityNode.Call("configureDoor", entity);
                     }
                     else if (entity["CLASSNAME"] == "FUNC_BUTTON")
                     {
                         entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
-                        entityNode.Call("configureButton", 1.0f);
+                        entityNode.Call("configureButton", entity);
                     }
                     else
                     {
