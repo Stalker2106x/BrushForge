@@ -1,18 +1,30 @@
 using Godot;
 using Godot.Collections;
 using System;
+using System.Data.Common;
 using System.IO;
+using System.Linq;
+using System.Reflection.Emit;
+using System.Reflection.PortableExecutable;
+using System.Runtime.InteropServices;
+using static IDSP;
+using static System.Net.Mime.MediaTypeNames;
 
-public partial class MDL : DataPack
+public partial class MDL_Legacy : DataPack
 {
-    public Header header;
-    public Array<Texture> textures;
-    public Array<MdlBone> bones;
-    public Array<MdlSequence> sequences;
-    public Array<MdlBodyPart> bodyParts;
+    MdlHeader header;
+    Array<MdlBone> bones;
+    Array<MdlBoneController> boneControllers;
+    Array<MdlSequence> sequences;
+    Array<MdlSequenceGroup> sequenceGroups;
+    Array<MdlTexture> textures;
+    Array<MdlBodyPart> bodyParts;
+    Array<MdlModel> models;
 
-    public partial class Header : GodotObject
-    {
+    Array<Transform3D> boneLocalTransforms;
+    Array<Transform3D> boneLocalTransformsInv;
+
+    partial class MdlHeader : GodotObject {
         string name; // Model name, 64 Chars
         UInt32 size;
         Vector3 eyesPosition;
@@ -48,8 +60,7 @@ public partial class MDL : DataPack
         UInt32 transitionsCount;
         UInt32 transitionsOffset;
 
-        public Header(FileStream fs, BinaryReader reader)
-        {
+        public MdlHeader(FileStream fs, BinaryReader reader) {
             name = ExtractString(reader.ReadBytes(64));
             size = reader.ReadUInt32();
             eyesPosition = DataPack.ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
@@ -225,7 +236,7 @@ public partial class MDL : DataPack
         }
     }
 
-    public partial class MdlSequence : GodotObject
+    partial class MdlSequence : GodotObject
     {
         public string name;
         public float fps;
@@ -316,39 +327,37 @@ public partial class MDL : DataPack
         }
     }
 
-    public partial class MdlTriVert : GodotObject
+    partial class MdlTexture : GodotObject
     {
-        public Int16 vertexIndex; // Index in vertices array
-        public Int16 normalIndex; // Index in normals array
-        public Int16 s;
-        public Int16 t;
+        public string name;
+        public UInt32 flags;
+        public UInt32 width;
+        public UInt32 height;
+        public UInt32 textureOffset;
+        public UInt32 id;
 
-        public MdlTriVert(FileStream fs, BinaryReader reader)
+        public Byte[] textureData; // Contains texture data as palette indexes
+        public Color[] palette; // Contains colors indexed
+
+        public MdlTexture(FileStream fs, BinaryReader reader)
         {
-            vertexIndex = reader.ReadInt16();
-            normalIndex = reader.ReadInt16();
-            s = reader.ReadInt16();
-            t = reader.ReadInt16();
+            name = ExtractString(reader.ReadBytes(64));
+            flags = reader.ReadUInt32();
+            width = reader.ReadUInt32();
+            height = reader.ReadUInt32();
+            textureOffset = reader.ReadUInt32();
+            id = reader.ReadUInt32();
         }
-    }
-    public partial class MdlTriangle : GodotObject
-    {
-        public MdlTriVert[] triverts;
-        public int type; // -1 for triangle strips, 1 for triangle fans
 
-        public static MdlTriangle Parse(FileStream fs, BinaryReader reader)
+        public void ExtractData(FileStream fs, BinaryReader reader)
         {
-            Int16 trivertCount = reader.ReadInt16();
-            if (trivertCount == 0)
-                return null; // Reached end
-            MdlTriangle triangle = new MdlTriangle();
-            triangle.triverts = new MdlTriVert[Math.Abs(trivertCount)];
-            for (int t = 0; t < Math.Abs(trivertCount); t++)
+            fs.Seek(textureOffset, SeekOrigin.Begin);
+            textureData = reader.ReadBytes((int)width * (int)height);
+            palette = new Color[256];
+            for (int i = 0; i < 256; i++)
             {
-                triangle.triverts[t] = new MdlTriVert(fs, reader);
-                triangle.type = Math.Sign(trivertCount);
+                palette[i] = new Color((float)reader.ReadByte() / 255.0f, (float)reader.ReadByte() / 255.0f, (float)reader.ReadByte() / 255.0f);
             }
-            return triangle;
         }
     }
 
@@ -360,7 +369,7 @@ public partial class MDL : DataPack
         public UInt32 normalsCount;
         public UInt32 normalsOffset;
 
-        public MdlTriangle[] triangles;
+        public MdlTriVert[][] triangles;
         public UInt32 normals;
 
         public MdlMesh(FileStream fs, BinaryReader reader)
@@ -374,15 +383,38 @@ public partial class MDL : DataPack
 
         public void Build(FileStream fs, BinaryReader reader)
         {
-            fs.Seek(trianglesOffset, SeekOrigin.Begin);
-            triangles = new MdlTriangle[trianglesCount];
             // Build tris
+            fs.Seek(trianglesOffset, SeekOrigin.Begin);
+            triangles = new MdlTriVert[trianglesCount][];
             for (int i = 0; i < trianglesCount; i++)
             {
-                MdlTriangle triangle = MdlTriangle.Parse(fs, reader);
-                if (triangle == null) break;
-                triangles[i] = triangle;
+                UInt16 triCount = reader.ReadUInt16();
+                if (triCount == 0) break; // Reached end
+                MdlTriVert[] tris = new MdlTriVert[triCount];
+                for (int j = 0; j < Math.Abs(triCount); j++)
+                {
+                    tris[j] = new MdlTriVert(fs, reader);
+                    tris[j].type = Math.Sign(triCount);
+                }
+                triangles[i] = tris;
             }
+        }
+    }
+
+    public partial class MdlTriVert : GodotObject
+    {
+        public Int16 vertexIndex;
+        public Int16 normalIndex;
+        public Int16 s;
+        public Int16 t;
+        public int type;
+
+        public MdlTriVert(FileStream fs, BinaryReader reader)
+        {
+            vertexIndex = reader.ReadInt16();
+            normalIndex = reader.ReadInt16();
+            s = reader.ReadInt16();
+            t = reader.ReadInt16();
         }
     }
 
@@ -425,6 +457,112 @@ public partial class MDL : DataPack
             groupsOffset = reader.ReadUInt32();
         }
 
+        public void stripToTri(Array<Vector3> finalV, Array<Vector3> finalN, Array<Vector2> uv, Array<UInt32> finalB)
+        {
+            Array<Vector3> fV = new Array<Vector3>();
+            Array<Vector3> fN = new Array<Vector3>();
+            Array<Vector2> fuv = new Array<Vector2>();
+            Array<UInt32> fB = new Array<UInt32>();
+            int size = finalV.Count - 2;
+            for (int i = 0; i < size; i++)
+            {
+                if (i % 2 != 0)
+                {
+                    rearrange(fV, finalV, i, 0, 2, 1);
+                    rearrange(fN, finalN, i, 0, 2, 1);
+                    rearrange(fuv, uv, i, 0, 2, 1);
+                    rearrange(fB, finalB, i, 0, 2, 1);
+                }
+                else
+                {
+                    rearrange(fV, finalV, i, 0, 1, 2);
+                    rearrange(fN, finalN, i, 0, 1, 2);
+                    rearrange(fuv, uv, i, 0, 1, 2);
+                    rearrange(fB, finalB, i, 0, 1, 2);
+                }
+            }
+            finalV = fV;
+            finalN = fN;
+            uv = fuv;
+            finalB = fB;
+        }
+
+
+        public void fanToTri(Array<Vector3> finalV, Array<Vector3> finalN, Array<Vector2> uv, Array<UInt32> finalB)
+        {
+            Array<Vector3> fV = new Array<Vector3>();
+            Array<Vector3> fN = new Array<Vector3>();
+            Array<Vector2> fuv = new Array<Vector2>();
+            Array<UInt32> fB = new Array<UInt32>();
+            int size = finalV.Count - 2;
+            for (int i = 0; i < size; i++)
+            {
+                rearrange(fV, finalV, 0, 0, i + 1, i + 2);
+                rearrange(fN, finalN, 0, 0, i + 1, i + 2);
+                rearrange(fuv, uv, 0, 0, i + 1, i + 2);
+                rearrange(fB, finalB, 0, 0, i + 1, i + 2);
+            }
+            finalV = fV;
+            finalN = fN;
+            uv = fuv;
+            finalB = fB;
+        }
+
+        void rearrange(Array<Vector3> dest, Array<Vector3> arr, int i, int a, int b, int c)
+        {
+            dest.Add(arr[i + a]);
+            dest.Add(arr[i + b]);
+            dest.Add(arr[i + c]);
+        }
+        void rearrange(Array<Vector2> dest, Array<Vector2> arr, int i, int a, int b, int c)
+        {
+            dest.Add(arr[i + a]);
+            dest.Add(arr[i + b]);
+            dest.Add(arr[i + c]);
+        }
+        void rearrange(Array<UInt32> dest, Array<UInt32> arr, int i, int a, int b, int c)
+        {
+            dest.Add(arr[i + a]);
+            dest.Add(arr[i + b]);
+            dest.Add(arr[i + c]);
+        }
+
+
+        public SurfaceTool createMesh(Array<MdlBone> bones, Array<Vector3> pVertices, Array<Vector3> pNormals, int type, Array<Vector2> pUv, Array<UInt32> pBoneIndices, int textureIndex, int lastTextureIdx, SurfaceTool runningMesh = null)
+        {
+            Array<Vector3> finalV = new Array<Vector3>();
+            Array<Vector3> finalN = new Array<Vector3>();
+            Array<UInt32> finalB = new Array<UInt32>();
+            for (int i = 0; i < pVertices.Count; i++)
+            {
+                runningMesh.SetNormal(pNormals[i]);
+                runningMesh.SetUV(pUv[i]);
+
+                UInt32 boneIndex = pBoneIndices[i];
+                Vector3 vertex = pVertices[i];
+                vertex = bones[(int)pBoneIndices[i]].transform * vertex;
+                finalV.Add(vertex);
+                finalN.Add(pNormals[i]);
+                finalB.Add(boneIndex);
+            }
+
+            if (type == -1)
+                fanToTri(finalV, finalN, pUv, finalB);
+            else if (type == 1)
+                stripToTri(finalV, finalN, pUv, finalB);
+
+            for (int i = 0; i < pVertices.Count; i++)
+            {
+                runningMesh.SetNormal(finalN[i]);
+                runningMesh.SetUV(pUv[i]);
+                runningMesh.SetWeights(new float[4] { 1, 0, 0, 0 });
+                runningMesh.SetBones(new int[4] { (int)finalB[i], 0, 0, 0 });
+                runningMesh.AddVertex(finalV[i]);
+            }
+
+            return runningMesh;
+        }
+
 
         public void Build(FileStream fs, BinaryReader reader, Array<MdlBone> bones)
         {
@@ -452,9 +590,65 @@ public partial class MDL : DataPack
             {
                 meshes.Add(new MdlMesh(fs, reader));
             }
-            foreach (MdlMesh mesh in meshes)
+            // Full render
+            SurfaceTool runningMesh = null;
+            int lastTextureIdx = -1;
+            ArrayMesh totalMesh = new ArrayMesh();
+            for (int i = 0; i < meshCount; i++)
             {
+                MdlMesh mesh = meshes[i];
                 mesh.Build(fs, reader);
+                int polyIdx = 0;
+                foreach(MdlTriVert[] poly in meshes[i].triangles)
+                {
+                    Array<Vector3> pVertices = new Array<Vector3>();
+                    Array<Vector3> pNormals = new Array<Vector3>();
+                    Array<Vector2> pUv = new Array<Vector2>();
+                    Array<string> pTex = new Array<string>();
+                    Array<UInt32> pBones = new Array<UInt32>();
+
+
+                    foreach (MdlTriVert vert in poly)
+                    {
+                        pVertices.Add(vertices[vert.vertexIndex]);
+                        pNormals.Add(normals[vert.normalIndex]);
+                        pUv.Add(new Vector2(vert.s, vert.t));
+                        pBones.Add(boneMap[vert.vertexIndex]);
+                    }
+
+                    if (runningMesh == null)
+                    {
+                        runningMesh = new SurfaceTool();
+                        //Create mat
+                        StandardMaterial3D mat = new StandardMaterial3D();
+                        //mat.albedo_texture = //Set Tex
+                        //mat.uv1_scale.x /= text.get_width()
+                        //mat.uv1_scale.y /= text.get_height()
+                        runningMesh.SetMaterial(mat);
+                        runningMesh.Begin(Mesh.PrimitiveType.Triangles);
+                        lastTextureIdx = (int)mesh.skinRef;
+                    }
+
+                    if (lastTextureIdx != mesh.skinRef) //#if texture changed
+                    {
+                        StandardMaterial3D mat = new StandardMaterial3D();
+                        runningMesh.SetMaterial(mat);
+                        runningMesh.Commit(totalMesh);
+                        //totalMesh.surface_set_material(textureIdx,mat)
+                        runningMesh = new SurfaceTool();
+                        runningMesh.Begin(Mesh.PrimitiveType.Triangles);
+                    }
+                    runningMesh = createMesh(bones, pVertices, pNormals, poly[0].type, pUv, pBones, (int)mesh.skinRef, lastTextureIdx, runningMesh);
+            
+                    if (i == meshCount - 1 && polyIdx == mesh.triangles.Length - 1)
+                    {
+                        StandardMaterial3D mat = new StandardMaterial3D();
+                        runningMesh.SetMaterial(mat);
+                        runningMesh.Commit(totalMesh);
+                    }
+                    lastTextureIdx = (int)mesh.skinRef;
+                    polyIdx += 1;
+                }
             }
         }
     }
@@ -474,10 +668,6 @@ public partial class MDL : DataPack
             modelsCount = reader.ReadUInt32();
             basee = reader.ReadUInt32();
             modelsOffset = reader.ReadUInt32();
-        }
-
-        public void Build(FileStream fs, BinaryReader reader, Array<MdlBone> bones)
-        {
             fs.Seek(modelsOffset, SeekOrigin.Begin);
             models = new MdlModel[modelsCount];
             for (int i = 0; i < modelsCount; i++)
@@ -492,39 +682,7 @@ public partial class MDL : DataPack
         }
     }
 
-    public partial class Texture : GodotObject
-    {
-        public string name; // Texture name, 64 Chars
-        public UInt32 flags;
-        public UInt32 width;
-        public UInt32 height;
-        public UInt32 textureOffset;
-
-        public Byte[] data;
-        public Color[] colorPalette;
-
-        public Texture(FileStream fs, BinaryReader reader)
-        {
-            name = ExtractString(reader.ReadBytes(64));
-            flags = reader.ReadUInt32();
-            width = reader.ReadUInt32();
-            height = reader.ReadUInt32();
-            textureOffset = reader.ReadUInt32();
-        }
-
-        public void LoadData(FileStream fs, BinaryReader reader)
-        {
-            fs.Seek(textureOffset, SeekOrigin.Begin);
-            data = reader.ReadBytes((int)width * (int)height);
-            colorPalette = new Color[256];
-            for (int i = 0; i < 256; i++)
-            {
-                colorPalette[i] = new Color(reader.ReadByte() / 255.0f, reader.ReadByte() / 255.0f, reader.ReadByte() / 255.0f);
-            }
-        }
-    }
-
-    public Transform3D ConvertTransform(Vector3 pos, Vector3 rot)
+    public Transform3D GetTransform(Vector3 pos, Vector3 rot)
     {
         Transform3D t = Transform3D.Identity;
         t.Origin = pos;
@@ -534,27 +692,66 @@ public partial class MDL : DataPack
         return t;
     }
 
+    public void boneItt3(MdlFrame frame, UInt32 bonesCount)
+    {
+        for (int boneIdx = 0; boneIdx < bonesCount; boneIdx++)
+        {
+            MdlBone bone = bones[boneIdx];
+            Vector3 boneRot = bone.rot;
+            Vector3 bonePos = bone.pos;
+            Vector3 framePos = frame.pos[boneIdx];
+            Vector3 frameRot = frame.rot[boneIdx];
+
+            bone.restTransform = GetTransform(bonePos, boneRot);
+
+            Transform3D animatedTransform = GetTransform(bonePos + framePos, boneRot + frameRot);
+            boneLocalTransforms.Add(animatedTransform);
+            boneLocalTransformsInv.Add(animatedTransform.Inverse());
+        }
+
+        for (int boneIdx = 0; boneIdx < bonesCount; boneIdx++)
+        {
+            MdlBone bone = bones[boneIdx];
+            Transform3D t = boneLocalTransforms[boneIdx];
+
+            int parentIdx = (int)bone.parentIndex;
+
+            while (parentIdx >= 0)
+            {
+                MdlBone parentBone = bones[parentIdx];
+                t *= boneLocalTransforms[parentIdx];
+                parentIdx = (int)parentBone.parentIndex;
+            }
+            bone.transform = t;
+        }
+    }
+
+
     override public void Import(FileStream fs, BinaryReader reader)
     {
         // Parse header
-        header = new Header(fs, reader);
-        // Parse textures
-        textures = new Array<Texture>();
-        fs.Seek(header.texturesOffset, SeekOrigin.Begin);
-        for (int i = 0; i < header.texturesCount; i++)
+        header = new MdlHeader(fs, reader);
+        for (int i = 0; i < header.sequenceGroupsCount; i++)
         {
-            textures.Add(new Texture(fs, reader));
+            //Find mdl dependencies ?
         }
-        // Insert in GDTextures
-        foreach (Texture texture in textures)
+        // Parse embedded textures
+        textures = new Array<MdlTexture>();
+        if (header.texturesCount > 0)
         {
-            texture.LoadData(fs, reader);
-            Image img = Image.Create((int)texture.width, (int)texture.height, false, Image.Format.Rgb8);
-            for (int i = 0; i < texture.data.Length; i++)
+            fs.Seek(header.texturesOffset, SeekOrigin.Begin);
+            for (int i = 0; i < header.texturesCount; i++)
             {
-                img.SetPixel((int)(i % texture.width), (int)(i / texture.width), texture.colorPalette[texture.data[i]]);
+                textures.Add(new MdlTexture(fs, reader));
             }
-            gdTextures[texture.name] = ImageTexture.CreateFromImage(img);
+            for (int i = 0; i < header.texturesCount; i++)
+            {
+                //textures[i].ExtractData(fs, reader);
+            }
+        }
+        else
+        {
+            // Find external texture ?
         }
         // Parse bones
         bones = new Array<MdlBone>();
@@ -570,10 +767,16 @@ public partial class MDL : DataPack
         {
             sequences.Add(new MdlSequence(fs, reader));
         }
-        foreach (MdlSequence sequence in sequences)
+        // Build sequence
+        for (int i = 0; i < header.sequencesCount; i++)
         {
-            sequence.Build(fs, reader, bones);
+            sequences[i].Build(fs, reader, bones);
         }
+        // Parse boneItt ?
+        boneLocalTransforms = new Array<Transform3D>();
+        boneLocalTransformsInv = new Array<Transform3D>();
+        boneItt3(sequences[0].blends[0].frames[0], header.bonesCount);
+
         // Parse bodyParts
         bodyParts = new Array<MdlBodyPart>();
         fs.Seek(header.bodyPartsOffset, SeekOrigin.Begin);
@@ -581,10 +784,20 @@ public partial class MDL : DataPack
         {
             bodyParts.Add(new MdlBodyPart(fs, reader, bones));
         }
-        foreach (MdlBodyPart bodyPart in bodyParts)
+        // Parse models
+        Array<MeshInstance3D> meshNodeArr = new Array<MeshInstance3D>();
+        foreach (MdlBodyPart part in bodyParts)
         {
-            bodyPart.Build(fs, reader, bones);
+            foreach (MdlModel model in part.models)
+            {
+                var meshNode = new MeshInstance3D();
+                //meshNode.Mesh = model.Build();
+                meshNode.Name = model.name;
+                //meshNode.Visible = part.visible;
+                meshNodeArr.Add(meshNode);
+            }
         }
+
         // Build model
         Skeleton3D skeletonNode = new Skeleton3D();
         skeletonNode.Name = "Model";
@@ -592,6 +805,96 @@ public partial class MDL : DataPack
         {
             skeletonNode.AddBone(bone.name);
         }
+        for (int boneIdx = 0; boneIdx < header.bonesCount; boneIdx++)
+        {
+            MdlBone bone = bones[boneIdx];
+            int sBoneIdx = skeletonNode.FindBone(bone.name);
+            skeletonNode.SetBoneParent(sBoneIdx, (int)bone.parentIndex);
+            skeletonNode.SetBoneRest(sBoneIdx, boneLocalTransforms[boneIdx]);
+            skeletonNode.SetBonePosePosition(sBoneIdx, boneLocalTransforms[boneIdx].Origin);
+            skeletonNode.SetBonePoseRotation(sBoneIdx, boneLocalTransforms[boneIdx].Basis.GetRotationQuaternion());
+        }
+        // Add animation
+        AnimationPlayer animPlayer = new AnimationPlayer();
+        animPlayer.Name = "anims";
+        var firstAnim = true;
+        var animLibrary = new AnimationLibrary();
+        foreach (MdlSequence seq in sequences)
+        {
+            Animation anim = new Animation();
+            var delta = 1 / seq.fps;
+
+
+            var animationName = seq.name.ToLower();
+            if (animationName == "deploy")
+                animationName = "draw"; //we rename grenades anim ????
+            animLibrary.AddAnimation(animationName, anim);
+            anim.Length = delta * seq.frameCount;
+
+
+            if (firstAnim == true)
+            {
+                animPlayer.Autoplay = seq.name.ToLower();
+                firstAnim = false;
+            }
+
+
+            if (seq.flags == 1)
+                anim.LoopMode = Animation.LoopModeEnum.Linear;
+
+
+            for (int boneIdx = 0; boneIdx < header.bonesCount; boneIdx++)
+            {
+                var bone = bones[boneIdx];
+                var boneRestTransform = GetTransform(bone.pos, bone.rot);
+                var animParentPath = "../" + skeletonNode.Name + ":" + bone.name;
+                var trackPosIdx = anim.AddTrack(Animation.TrackType.Position3D);
+                var trackRotIdx = anim.AddTrack(Animation.TrackType.Rotation3D);
+                var trackScaleIdx = anim.AddTrack(Animation.TrackType.Scale3D);
+                anim.TrackSetPath(trackPosIdx, animParentPath);
+                anim.TrackSetPath(trackRotIdx, animParentPath);
+                anim.TrackSetPath(trackScaleIdx, animParentPath);
+
+                for (int i = 0; i < seq.frameCount; i++)
+                {
+                    var frameData = seq.blends[0].frames[i];
+                    var allPos = frameData.pos;
+                    var allRot = frameData.rot;
+                    var pos = bone.pos + allPos[boneIdx];
+                    var rot = bone.rot + allRot[boneIdx];
+
+                    Transform3D t = boneLocalTransforms[boneIdx] * (boneLocalTransformsInv[boneIdx] * GetTransform(pos, rot));
+
+                    t.Translated(pos);
+                    var rotQuat = t.Basis.GetRotationQuaternion();
+
+
+
+                    var keyLocation = Vector3.Zero;
+                    var keyRotation = Quaternion.Identity;
+                    var keyScale = new Vector3(1, 1, 1);
+                    if (t.Origin != keyLocation || keyRotation != rotQuat)
+                    {
+                        keyLocation = t.Origin;
+                        keyRotation = rotQuat;
+                        anim.PositionTrackInsertKey(trackPosIdx, i * delta, keyLocation);
+                        anim.RotationTrackInsertKey(trackRotIdx, i * delta, keyRotation);
+                        anim.ScaleTrackInsertKey(trackScaleIdx, i * delta, keyScale);
+                    }
+                }
+            }
+        }
+        animPlayer.AddAnimationLibrary("mdl", animLibrary);
+        skeletonNode.AddChild(animPlayer);
+
+        // Add Mesh
+        foreach (Node3D mesh in meshNodeArr)
+        {
+            skeletonNode.AddChild(mesh);
+        }
+
+        //skeletonNode.RotationDegrees.X = -90;
+        //skeletonNode.RotationDegrees.Z = 90;
         gdModel = skeletonNode;
     }
 }

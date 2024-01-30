@@ -344,7 +344,7 @@ always_on_top = true
 ok_button_text = "Ouvrir"
 file_mode = 1
 access = 2
-filters = PackedStringArray("*.bsp, *.wad, *.pk3", "*.spr, *.bmp, *.tga", "*.wav, *.mp3")
+filters = PackedStringArray("*.bsp, *.wad, *.mdl, *.spr, *.bmp, *.wav ; Supported Files")
 use_native_dialog = true
 
 [node name="FolderDialog" type="FileDialog" parent="."]

@@ -29,6 +29,12 @@ func showContent(fileId):
         entryIt.get_node("TextureName").set_text(textureName);
         texturesList.add_child(entryIt);
     get_node("Layout/TabContainer/Textures/Info").set_text("%d Textures found" % fileTextures.size());
+    #Model
+    var animationsList = get_node("Layout/TabContainer/Model/AnimationsList");
+    for child in animationsList.get_children():
+        child.queue_free();
+    var viewport = get_node("Layout/TabContainer/Model/SubViewportContainer/SubViewport");
+    viewport.add_child(files[fileId].gdModel);
     #Sounds
     var soundsList = get_node("Layout/TabContainer/Sounds/ScrollContainer/SoundsList");
     for child in soundsList.get_children():

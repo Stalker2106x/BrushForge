@@ -361,7 +361,7 @@ public partial class GoldSrcBSP : DataPack
                         }
                     } else if (shading == "shaded") {
                         material = new StandardMaterial3D();
-                        (material as StandardMaterial3D).AlbedoColor = new Color((float)GD.RandRange(0.0, 1.0), (float)GD.RandRange(0.0, 1.0), (float)GD.RandRange(0.0, 1.0));
+                        (material as StandardMaterial3D).AlbedoColor = new Color((float)GD.RandRange(0.0f, 1.0f), (float)GD.RandRange(0.0f, 1.0f), (float)GD.RandRange(0.0f, 1.0f));
                     } else if (shading == "wireframe") {
                         material = GD.Load<ShaderMaterial>("res://materials/WireframeMaterial.tres");
                     }
