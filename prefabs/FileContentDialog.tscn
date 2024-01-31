@@ -96,7 +96,7 @@ script = ExtResource("3_b8643")
 
 [node name="SubViewport" type="SubViewport" parent="Layout/TabContainer/Model/SubViewportContainer"]
 handle_input_locally = false
-render_target_update_mode = 4
+render_target_update_mode = 0
 
 [node name="Center" type="Marker3D" parent="Layout/TabContainer/Model/SubViewportContainer/SubViewport"]
 

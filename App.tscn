@@ -121,7 +121,7 @@ stretch = true
 handle_input_locally = false
 audio_listener_enable_2d = true
 audio_listener_enable_3d = true
-size = Vector2i(968, 593)
+size = Vector2i(2, 2)
 render_target_update_mode = 4
 
 [node name="Camera" parent="Layout/CenterLayout/Main/3DView/Viewport/World" instance=ExtResource("5_4mito")]
