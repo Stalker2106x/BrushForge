@@ -2,6 +2,7 @@ using Godot;
 using Godot.Collections;
 using System;
 using System.IO;
+using static IDSP;
 
 public partial class MDL : DataPack
 {
@@ -10,6 +11,9 @@ public partial class MDL : DataPack
     public Array<MdlBone> bones;
     public Array<MdlSequence> sequences;
     public Array<MdlBodyPart> bodyParts;
+
+    Array<Transform3D> boneLocalTransforms;
+    Array<Transform3D> boneLocalTransformsInv;
 
     public partial class Header : GodotObject
     {
@@ -148,82 +152,82 @@ public partial class MDL : DataPack
         }
     }
 
-    public partial class MdlFrame : GodotObject
-    {
-        public Vector3[] pos; // Array of bone positions indexed by boneIdx
-        public Vector3[] rot; // Array of bone rotations indexed by boneIdx
-
-        public MdlFrame(int frameCount)
-        {
-            pos = new Vector3[frameCount];
-            rot = new Vector3[frameCount];
-        }
-    }
-
     public partial class MdlBlend : GodotObject
     {
         public MdlFrame[] frames;
 
-        public MdlBlend(FileStream fs, BinaryReader reader, Array<MdlBone> bones, UInt32 blendCount, UInt32 frameCount, UInt32 sequenceGroup)
+        public MdlBlend(BinaryReader reader, MdlSequence sequence, int boneCount, long startPosition, ushort[] boneOffsets)
         {
-            // Group gives accurate file containing anims, unused here
-            int bonesCount = bones.Count;
-            // Parse pos and rot of each bone
-            var offsetCount = blendCount * (6 * bonesCount);
-            UInt16[] blendOffsets = new UInt16[offsetCount];
-            for (int i = 0; i < offsetCount; i++)
+            frames = new MdlFrame[sequence.frameCount];
+            for (var i = 0; i < frames.Length; i++)
             {
-                blendOffsets[i] = reader.ReadUInt16();
+                frames[i] = new MdlFrame();
+                frames[i].positions = new Vector3[boneCount];
+                frames[i].rotations = new Vector3[boneCount];
             }
 
-            frames = new MdlFrame[frameCount];
-            for (int boneIndex = 0; boneIndex < bonesCount; boneIndex++)
+            for (var i = 0; i < boneCount; i++)
             {
-                MdlBone bone = bones[boneIndex];
-                UInt16[][] boneFrameData = new UInt16[6][];
-                for (int i = 0; i < 6; i++)
+                var boneValues = new short[6][];
+                for (var j = 0; j < 6; j++)
                 {
-                    UInt16[] animData = new UInt16[frameCount];
-                    UInt16 offset = blendOffsets[boneIndex * 6 + i];
-                    if (offset == 0)
+                    var offset = boneOffsets[i * 6 + j];
+                    if (offset <= 0)
                     {
-                        for (int j = 0; j < frameCount; j++)
-                        {
-                            animData[j] = 0;
-                        }
+                        boneValues[j] = new short[sequence.frameCount];
+                        continue;
                     }
-                    else
-                    {
-                        for (int j = 0; j < frameCount; j++)
-                        {
-                            Byte compressedSize = reader.ReadByte();
-                            Byte uncompressedSize = reader.ReadByte();
-                            UInt16[] compressedData = new UInt16[compressedSize];
-                            for (int c = 0; c < compressedSize; c++)
-                            {
-                                compressedData[c] = reader.ReadUInt16();
-                            }
-                            int k = 0;
-                            while (k < compressedSize && j < frameCount)
-                            {
-                                animData[j] = compressedData[Math.Min(compressedSize - 1, k)];
-                                k++;
-                                j++;
-                            }
-                        }
-                    }
-                    boneFrameData[i] = (animData);
+
+                    reader.BaseStream.Seek(startPosition + i * 6 * 2 + offset, SeekOrigin.Begin);
+                    boneValues[j] = MdlFrame.ReadAnimationFrameValues(reader, (int)sequence.frameCount);
                 }
-                for (int i = 0; i < frameCount; i++)
+
+                for (var j = 0; j < sequence.frameCount; j++)
                 {
-                    MdlFrame frame = new MdlFrame((int)frameCount);
-                    frame.pos[i] = new Vector3(boneFrameData[0][i], boneFrameData[1][i], boneFrameData[2][i]);
-                    frame.rot[i] = new Vector3(boneFrameData[3][i], boneFrameData[4][i], boneFrameData[5][i]);
-                    frames[i] = frame;
+                    frames[j].positions[i] = DataPack.ConvertVector(new Vector3(boneValues[0][j], boneValues[1][j], boneValues[2][j]));
+                    frames[j].rotations[i] = DataPack.ConvertVector(new Vector3(boneValues[3][j], boneValues[4][j], boneValues[5][j]));
                 }
             }
         }
     }
+
+    public partial class MdlFrame : GodotObject
+    {
+        public Vector3[] positions;
+        public Vector3[] rotations;
+
+        public static short[] ReadAnimationFrameValues(BinaryReader reader, int count)
+        {
+            /*
+             * RLE data:
+             * byte compressed_length - compressed number of values in the data
+             * byte uncompressed_length - uncompressed number of values in run
+             * short values[compressed_length] - values in the run, the last value is repeated to reach the uncompressed length
+             */
+            var values = new short[count];
+
+            for (var i = 0; i < count; /* i = i */)
+            {
+                var run = reader.ReadBytes(2); // read the compressed and uncompressed lengths
+
+                Int16[] vals = new Int16[run[0]];
+                for (int v = 0; v < run[0]; v++)
+                    vals[v] = reader.ReadInt16();
+                for (var j = 0; j < run[1] && i < count; i++, j++)
+                {
+                    var idx = Math.Min(run[0] - 1, j); // value in the data or the last value if we're past the end
+                    values[i] = vals[idx];
+                }
+            }
+
+            return values;
+        }
+
+    }
+
+    /*
+     * 
+     */
 
     public partial class MdlSequence : GodotObject
     {
@@ -292,11 +296,23 @@ public partial class MDL : DataPack
 
         public void Build(FileStream fs, BinaryReader reader, Array<MdlBone> bones)
         {
-            fs.Seek(animationOffset, SeekOrigin.Begin);
+
             blends = new MdlBlend[blendCount];
-            for (int i = 0; i < blendCount; i++)
+            var blendLength = 6 * bones.Count;
+
+            reader.BaseStream.Seek(animationOffset, SeekOrigin.Begin);
+
+            var animPosition = reader.BaseStream.Position;
+            UInt16[] offsets = new UInt16[blendLength * blendCount];
+            for (int i = 0; i < blendLength * blendCount; i++)
+                offsets[i] = reader.ReadUInt16();
+            for (var i = 0; i < blendCount; i++)
             {
-                blends[i] = new MdlBlend(fs, reader, bones, blendCount, frameCount, sequenceGroup);
+                var blendOffsets = new ushort[blendLength];
+                System.Array.Copy(offsets, blendLength * i, blendOffsets, 0, blendLength);
+
+                var startPosition = animPosition + i * blendLength * 2;
+                blends[i] = new MdlBlend(reader, this, bones.Count, startPosition, blendOffsets);
             }
         }
     }
@@ -318,36 +334,46 @@ public partial class MDL : DataPack
 
     public partial class MdlTriVert : GodotObject
     {
-        public Int16 vertexIndex; // Index in vertices array
+        public Int16 vertexIndex; 
         public Int16 normalIndex; // Index in normals array
         public Int16 s;
         public Int16 t;
 
         public MdlTriVert(FileStream fs, BinaryReader reader)
         {
-            vertexIndex = reader.ReadInt16();
-            normalIndex = reader.ReadInt16();
-            s = reader.ReadInt16();
-            t = reader.ReadInt16();
         }
     }
-    public partial class MdlTriangle : GodotObject
+    /*
+     * This class represents an array of GL triangle strips / fan, that we need to unpack
+     */
+    public partial class MdlTrianglePack : GodotObject
     {
-        public MdlTriVert[] triverts;
-        public int type; // -1 for triangle strips, 1 for triangle fans
+        public Int16 trivertCount;
+        public UInt16[] verticeIndexes; // Index in mesh vertices array
+        public UInt16[] normalIndexes; // Index in mesh vertices array
+        public UInt16[] s; // UV first coordinate
+        public UInt16[] t; // UV second coordinate
+        public int type; // -1 for triangle fans, 1 for triangle strips
 
-        public static MdlTriangle Parse(FileStream fs, BinaryReader reader)
+        public static MdlTrianglePack Parse(FileStream fs, BinaryReader reader)
         {
             Int16 trivertCount = reader.ReadInt16();
             if (trivertCount == 0)
                 return null; // Reached end
-            MdlTriangle triangle = new MdlTriangle();
-            triangle.triverts = new MdlTriVert[Math.Abs(trivertCount)];
-            for (int t = 0; t < Math.Abs(trivertCount); t++)
+            MdlTrianglePack triangle = new MdlTrianglePack();
+            triangle.trivertCount = Math.Abs(trivertCount);
+            triangle.verticeIndexes = new UInt16[triangle.trivertCount];
+            triangle.normalIndexes = new UInt16[triangle.trivertCount];
+            triangle.s = new UInt16[triangle.trivertCount];
+            triangle.t = new UInt16[triangle.trivertCount];
+            for (int t = 0; t < triangle.trivertCount; t++)
             {
-                triangle.triverts[t] = new MdlTriVert(fs, reader);
-                triangle.type = Math.Sign(trivertCount);
+                triangle.verticeIndexes[t] = reader.ReadUInt16();
+                triangle.normalIndexes[t] = reader.ReadUInt16();
+                triangle.s[t] = reader.ReadUInt16();
+                triangle.t[t] = reader.ReadUInt16();
             }
+            triangle.type = Math.Sign(trivertCount);
             return triangle;
         }
     }
@@ -360,8 +386,9 @@ public partial class MDL : DataPack
         public UInt32 normalsCount;
         public UInt32 normalsOffset;
 
-        public MdlTriangle[] triangles;
-        public UInt32 normals;
+        public Array<MdlTrianglePack> trianglePacks;
+
+        public Array<Vector3> sVerticesIndex; // Index connecting the final array in surfaceTool
 
         public MdlMesh(FileStream fs, BinaryReader reader)
         {
@@ -372,17 +399,80 @@ public partial class MDL : DataPack
             normalsOffset = reader.ReadUInt32();
         }
 
-        public void Build(FileStream fs, BinaryReader reader)
+        public void Parse(FileStream fs, BinaryReader reader)
         {
+            // Parse tris
             fs.Seek(trianglesOffset, SeekOrigin.Begin);
-            triangles = new MdlTriangle[trianglesCount];
-            // Build tris
+            trianglePacks = new Array<MdlTrianglePack>();
             for (int i = 0; i < trianglesCount; i++)
             {
-                MdlTriangle triangle = MdlTriangle.Parse(fs, reader);
-                if (triangle == null) break;
-                triangles[i] = triangle;
+                MdlTrianglePack triangle = MdlTrianglePack.Parse(fs, reader);
+                if (triangle == null) break; // Reached end of trianglePacks
+                trianglePacks.Add(triangle);
             }
+        }
+
+        public ArrayMesh Build(Dictionary<string, Texture2D> gdTextures, Vector3[] allVertices, Vector3[] allNormals, Byte[] boneIndexes)
+        {
+            Array<SurfaceTool> sfTools = new Array<SurfaceTool>();
+            // Build final vertices & normal arrays
+            foreach (MdlTrianglePack trianglePack in trianglePacks)
+            {
+                SurfaceTool sfTool = new SurfaceTool();
+                sfTool.Begin(Mesh.PrimitiveType.Triangles);
+                for (int i = 0; i < trianglePack.trivertCount - 2; i++)
+                {
+                    for (int summit = 0; summit < 3; summit++)
+                    {
+                        // We have to populate surfacetool per triangle (3 vertex for each),
+                        // (1)  In triangle strips (/\/\/\), we iterate on current summit + the next two verts, because they are also part of the triangle.
+                        // (-1) In triangle fans (_\|/_), we iterate on first summit + the next two verts, because all triangles have the first summit of
+                        //      the whole array in common.
+                        // In both cases, we end with an offset of 2 to compensate.
+                        // We store the index of current summit in triangle fan vertex array in the "trivertIndex" variable
+                        int trivertIndex = -1;
+                        if (trianglePack.type == 1)
+                        {
+                            switch (summit)
+                            {
+                                case 0:
+                                    trivertIndex = i + 0;
+                                    break;
+                                case 1:
+                                    trivertIndex = i % 2 == 1 ? i + 2 : i + 1;
+                                    break;
+                                case 2:
+                                    trivertIndex = i % 2 == 1 ? i + 1 : i + 2;
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            trivertIndex = (summit == 0 ? 0 : i + summit);
+                        }
+
+                        int vertexIndex = trianglePack.verticeIndexes[trivertIndex];
+                        sfTool.SetNormal(allNormals[trianglePack.normalIndexes[trivertIndex]]);
+                        sfTool.SetUV(new Vector2(trianglePack.s[trivertIndex], trianglePack.t[trivertIndex]));
+                        sfTool.SetWeights(new float[] { 1.0f, 0.0f, 0.0f, 0.0f });
+                        sfTool.SetBones(new int[] { boneIndexes[vertexIndex], 0, 0, 0 });
+                        sfTool.AddVertex(allVertices[vertexIndex]);
+                    }
+                }
+                sfTools.Add(sfTool);
+            }
+            ArrayMesh mesh = null;
+            Array<string> keys = gdTextures.Keys as Array<string>;
+            Texture2D texture = gdTextures[keys[(int)skinRef]];
+            foreach (SurfaceTool sfTool in sfTools)
+            {
+                StandardMaterial3D mat = new StandardMaterial3D();
+                mat.Uv1Scale /= new Vector3(texture.GetWidth(), texture.GetHeight(), 1);
+                mat.AlbedoTexture = texture;
+                sfTool.SetMaterial(mat);
+                mesh = sfTool.Commit(mesh);
+            }
+            return mesh;
         }
     }
 
@@ -404,7 +494,7 @@ public partial class MDL : DataPack
 
         public Vector3[] vertices;
         public Vector3[] normals;
-        public Byte[] boneMap;
+        public Byte[] boneIndexes;
 
         public Array<MdlMesh> meshes;
 
@@ -426,7 +516,7 @@ public partial class MDL : DataPack
         }
 
 
-        public void Build(FileStream fs, BinaryReader reader, Array<MdlBone> bones)
+        public void Parse(FileStream fs, BinaryReader reader, Array<MdlBone> bones)
         {
             // Parse vertices
             fs.Seek(verticesOffset, SeekOrigin.Begin);
@@ -442,10 +532,10 @@ public partial class MDL : DataPack
             {
                 normals[i] = DataPack.ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
             }
-            // Parse transformIndices
+            // Parse boneIndexes
             fs.Seek(verticesInfoOffset, SeekOrigin.Begin);
-            boneMap = reader.ReadBytes((int)verticesCount);
-            // Parse mesh
+            boneIndexes = reader.ReadBytes((int)verticesCount);
+            // Parse meshes
             fs.Seek(meshOffset, SeekOrigin.Begin);
             meshes = new Array<MdlMesh>();
             for (int i = 0; i < meshCount; i++)
@@ -454,7 +544,18 @@ public partial class MDL : DataPack
             }
             foreach (MdlMesh mesh in meshes)
             {
-                mesh.Build(fs, reader);
+                mesh.Parse(fs, reader);
+            }
+        }
+
+        public void Build(Node3D modelNode, Dictionary<string, Texture2D> gdTextures)
+        {
+            foreach (MdlMesh mesh in meshes)
+            {
+                MeshInstance3D meshInstance = new MeshInstance3D();
+                meshInstance.Name = name;
+                meshInstance.Mesh = mesh.Build(gdTextures, vertices, normals, boneIndexes);
+                modelNode.AddChild(meshInstance);
             }
         }
     }
@@ -476,18 +577,26 @@ public partial class MDL : DataPack
             modelsOffset = reader.ReadUInt32();
         }
 
-        public void Build(FileStream fs, BinaryReader reader, Array<MdlBone> bones)
+        public void Parse(FileStream fs, BinaryReader reader, Array<MdlBone> bones)
         {
+            // Parse models
             fs.Seek(modelsOffset, SeekOrigin.Begin);
             models = new MdlModel[modelsCount];
             for (int i = 0; i < modelsCount; i++)
             {
                 models[i] = new MdlModel(fs, reader);
             }
-            // Build models
-            for (int i = 0; i < modelsCount; i++)
+            foreach (MdlModel model in models)
             {
-                models[i].Build(fs, reader, bones);
+                model.Parse(fs, reader, bones);
+            }
+        }
+
+        public void Build(Node3D modelNode, Dictionary<string, Texture2D> gdTextures)
+        {
+            foreach (MdlModel model in models)
+            {
+                model.Build(modelNode, gdTextures);
             }
         }
     }
@@ -532,6 +641,40 @@ public partial class MDL : DataPack
         t.Basis = t.Basis.Rotated(new Vector3(0, 1, 0), rot.Y);
         t.Basis = t.Basis.Rotated(new Vector3(0, 0, 1), rot.Z);
         return t;
+    }
+    
+    public void boneItt3(MdlFrame frame, UInt32 bonesCount)
+    {
+        for (int boneIdx = 0; boneIdx < bonesCount; boneIdx++)
+        {
+            MdlBone bone = bones[boneIdx];
+            Vector3 boneRot = bone.rot;
+            Vector3 bonePos = bone.pos;
+            Vector3 framePos = frame.positions[boneIdx];
+            Vector3 frameRot = frame.rotations[boneIdx];
+
+            bone.restTransform = ConvertTransform(bonePos, boneRot);
+
+            Transform3D animatedTransform = ConvertTransform(bonePos + framePos, boneRot + frameRot);
+            boneLocalTransforms.Add(animatedTransform);
+            boneLocalTransformsInv.Add(animatedTransform.Inverse());
+        }
+
+        for (int boneIdx = 0; boneIdx < bonesCount; boneIdx++)
+        {
+            MdlBone bone = bones[boneIdx];
+            Transform3D t = boneLocalTransforms[boneIdx];
+
+            int parentIdx = (int)bone.parentIndex;
+
+            while (parentIdx >= 0)
+            {
+                MdlBone parentBone = bones[parentIdx];
+                t *= boneLocalTransforms[parentIdx];
+                parentIdx = (int)parentBone.parentIndex;
+            }
+            bone.transform = t;
+        }
     }
 
     override public void Import(FileStream fs, BinaryReader reader)
@@ -583,15 +726,104 @@ public partial class MDL : DataPack
         }
         foreach (MdlBodyPart bodyPart in bodyParts)
         {
-            bodyPart.Build(fs, reader, bones);
+            bodyPart.Parse(fs, reader, bones);
         }
-        // Build model
+        // Build full render
         Skeleton3D skeletonNode = new Skeleton3D();
+        // Build Mesh
+        foreach (MdlBodyPart bodyPart in bodyParts)
+        {
+            bodyPart.Build(skeletonNode, gdTextures);
+        }
+        // Parse boneItt ?
+        boneLocalTransforms = new Array<Transform3D>();
+        boneLocalTransformsInv = new Array<Transform3D>();
+        boneItt3(sequences[0].blends[0].frames[0], header.bonesCount);
+        // Build Skel
         skeletonNode.Name = "Model";
         foreach (MdlBone bone in bones)
         {
             skeletonNode.AddBone(bone.name);
         }
+        for (int boneIdx = 0; boneIdx < header.bonesCount; boneIdx++)
+        {
+            MdlBone bone = bones[boneIdx];
+            int sBoneIdx = skeletonNode.FindBone(bone.name);
+            skeletonNode.SetBoneParent(sBoneIdx, (int)bone.parentIndex);
+            skeletonNode.SetBoneRest(sBoneIdx, boneLocalTransforms[boneIdx]);
+            skeletonNode.SetBonePosePosition(sBoneIdx, boneLocalTransforms[boneIdx].Origin);
+            skeletonNode.SetBonePoseRotation(sBoneIdx, boneLocalTransforms[boneIdx].Basis.GetRotationQuaternion());
+        }
+        // Add animation
+        AnimationPlayer animPlayer = new AnimationPlayer();
+        animPlayer.Name = "anims";
+        var firstAnim = true;
+        var animLibrary = new AnimationLibrary();
+        foreach (MdlSequence seq in sequences)
+        {
+            if (!firstAnim) break; // TEST PURPOSE
+            Animation anim = new Animation();
+            var delta = 1 / seq.fps;
+
+
+            var animationName = seq.name.ToLower();
+            animLibrary.AddAnimation(animationName, anim);
+            anim.Length = delta * seq.frameCount;
+
+
+            if (firstAnim == true)
+            {
+                animPlayer.Autoplay = seq.name.ToLower();
+                firstAnim = false;
+            }
+
+
+            if (seq.flags == 1)
+                anim.LoopMode = Animation.LoopModeEnum.Linear;
+
+
+            for (int boneIdx = 0; boneIdx < header.bonesCount; boneIdx++)
+            {
+                var bone = bones[boneIdx];
+                var boneRestTransform = ConvertTransform(bone.pos, bone.rot);
+                var animParentPath = "../" + skeletonNode.Name + ":" + bone.name;
+                var trackPosIdx = anim.AddTrack(Animation.TrackType.Position3D);
+                var trackRotIdx = anim.AddTrack(Animation.TrackType.Rotation3D);
+                var trackScaleIdx = anim.AddTrack(Animation.TrackType.Scale3D);
+                anim.TrackSetPath(trackPosIdx, animParentPath);
+                anim.TrackSetPath(trackRotIdx, animParentPath);
+                anim.TrackSetPath(trackScaleIdx, animParentPath);
+
+                for (int i = 0; i < seq.frameCount; i++)
+                {
+                    var frameData = seq.blends[0].frames[i];
+                    var pos = bone.pos + frameData.positions[boneIdx];
+                    var rot = bone.rot + frameData.rotations[boneIdx];
+
+                    Transform3D t = boneLocalTransforms[boneIdx] * (boneLocalTransformsInv[boneIdx] * ConvertTransform(pos, rot));
+
+                    t.Translated(pos);
+                    var rotQuat = t.Basis.GetRotationQuaternion();
+
+
+
+                    var keyLocation = Vector3.Zero;
+                    var keyRotation = Quaternion.Identity;
+                    var keyScale = new Vector3(1, 1, 1);
+                    if (t.Origin != keyLocation || keyRotation != rotQuat)
+                    {
+                        keyLocation = t.Origin;
+                        keyRotation = rotQuat;
+                        anim.PositionTrackInsertKey(trackPosIdx, i * delta, keyLocation);
+                        anim.RotationTrackInsertKey(trackRotIdx, i * delta, keyRotation);
+                        anim.ScaleTrackInsertKey(trackScaleIdx, i * delta, keyScale);
+                    }
+                }
+            }
+        }
+        animPlayer.AddAnimationLibrary("mdl", animLibrary);
+        skeletonNode.AddChild(animPlayer);
+
         gdModel = skeletonNode;
     }
 }

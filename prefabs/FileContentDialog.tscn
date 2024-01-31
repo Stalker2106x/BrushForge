@@ -1,9 +1,12 @@
-[gd_scene load_steps=4 format=3 uid="uid://ndjisg7fxapk"]
+[gd_scene load_steps=5 format=3 uid="uid://ndjisg7fxapk"]
 
 [ext_resource type="Script" path="res://scripts/FileContentDialog.gd" id="1_3tbva"]
 [ext_resource type="Script" path="res://scripts/ResponsiveGrid.gd" id="2_mnlux"]
+[ext_resource type="Script" path="res://prefabs/ModelViewer.gd" id="3_b8643"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_wc5yg"]
+[sub_resource type="Environment" id="Environment_llhxh"]
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
 
 [node name="FileContentDialog" type="Window"]
 title = "File Content"
@@ -89,16 +92,17 @@ size_flags_horizontal = 3
 
 [node name="SubViewportContainer" type="SubViewportContainer" parent="Layout/TabContainer/Model"]
 layout_mode = 2
+script = ExtResource("3_b8643")
 
 [node name="SubViewport" type="SubViewport" parent="Layout/TabContainer/Model/SubViewportContainer"]
 handle_input_locally = false
-render_target_update_mode = 0
+render_target_update_mode = 4
 
-[node name="Camera3D" type="Camera3D" parent="Layout/TabContainer/Model/SubViewportContainer/SubViewport"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2.29341)
+[node name="Center" type="Marker3D" parent="Layout/TabContainer/Model/SubViewportContainer/SubViewport"]
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Layout/TabContainer/Model/SubViewportContainer/SubViewport"]
-mesh = SubResource("BoxMesh_wc5yg")
+[node name="Camera3D" type="Camera3D" parent="Layout/TabContainer/Model/SubViewportContainer/SubViewport/Center"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.5)
+environment = SubResource("Environment_llhxh")
 
 [node name="HSplitContainer" type="HSplitContainer" parent="Layout/TabContainer/Model"]
 layout_mode = 2
