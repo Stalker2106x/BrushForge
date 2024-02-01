@@ -414,12 +414,11 @@ public partial class MDL : DataPack
 
         public ArrayMesh Build(Array<MdlBone> bones, Dictionary<string, Texture2D> gdTextures, Vector3[] allVertices, Vector3[] allNormals, Byte[] boneIndexes)
         {
-            Array<SurfaceTool> sfTools = new Array<SurfaceTool>();
-            // Build final vertices & normal arrays
+            SurfaceTool sfTool = new SurfaceTool();
+            sfTool.Begin(Mesh.PrimitiveType.Triangles);
+            // Build mesh
             foreach (MdlTrianglePack trianglePack in trianglePacks)
             {
-                SurfaceTool sfTool = new SurfaceTool();
-                sfTool.Begin(Mesh.PrimitiveType.Triangles);
                 for (int i = 0; i < trianglePack.trivertCount - 2; i++)
                 {
                     for (int summit = 0; summit < 3; summit++)
@@ -452,27 +451,22 @@ public partial class MDL : DataPack
                         }
 
                         int vertexIndex = trianglePack.verticeIndexes[trivertIndex];
-                        Vector3 tVertex = allVertices[vertexIndex] * bones[boneIndexes[vertexIndex]].transform;
                         sfTool.SetNormal(allNormals[trianglePack.normalIndexes[trivertIndex]]);
                         sfTool.SetUV(new Vector2(trianglePack.s[trivertIndex], trianglePack.t[trivertIndex]));
                         sfTool.SetWeights(new float[] { 1.0f, 0.0f, 0.0f, 0.0f });
                         sfTool.SetBones(new int[] { boneIndexes[vertexIndex], 0, 0, 0 });
-                        sfTool.AddVertex(tVertex);
+                        sfTool.AddVertex(allVertices[vertexIndex]);
                     }
                 }
-                sfTools.Add(sfTool);
             }
             ArrayMesh mesh = null;
             Array<string> keys = gdTextures.Keys as Array<string>;
             Texture2D texture = gdTextures[keys[(int)skinRef]];
-            foreach (SurfaceTool sfTool in sfTools)
-            {
-                StandardMaterial3D mat = new StandardMaterial3D();
-                mat.Uv1Scale /= new Vector3(texture.GetWidth(), texture.GetHeight(), 1);
-                mat.AlbedoTexture = texture;
-                sfTool.SetMaterial(mat);
-                mesh = sfTool.Commit(mesh);
-            }
+            StandardMaterial3D mat = new StandardMaterial3D();
+            mat.Uv1Scale /= new Vector3(texture.GetWidth(), texture.GetHeight(), 1);
+            mat.AlbedoTexture = texture;
+            sfTool.SetMaterial(mat);
+            mesh = sfTool.Commit(mesh);
             return mesh;
         }
     }
@@ -551,6 +545,12 @@ public partial class MDL : DataPack
 
         public void Build(Node3D modelNode, Array<MdlBone> bones, Dictionary<string, Texture2D> gdTextures)
         {
+            // Apply transform
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                vertices[i] = bones[boneIndexes[i]].transform * vertices[i];
+            }
+            // Build
             foreach (MdlMesh mesh in meshes)
             {
                 MeshInstance3D meshInstance = new MeshInstance3D();
@@ -634,42 +634,40 @@ public partial class MDL : DataPack
         }
     }
 
-    public Transform3D ConvertTransform(Vector3 pos, Vector3 rot)
+    Transform3D GetTransform(Vector3 pos, Vector3 rot)
     {
-        Transform3D t = Transform3D.Identity;
-        t.Origin = pos;
-        t.Basis = t.Basis.Rotated(new Vector3(1, 0, 0), rot.X);
-        t.Basis = t.Basis.Rotated(new Vector3(0, 1, 0), rot.Y);
-        t.Basis = t.Basis.Rotated(new Vector3(0, 0, 1), rot.Z);
-        return t;
+        var transform = Transform3D.Identity;
+        transform.Origin = pos;
+        transform.Basis = transform.Basis.Rotated(new Vector3(1, 0, 0), rot.X);
+        transform.Basis = transform.Basis.Rotated(new Vector3(0, 1, 0), rot.Y);
+        transform.Basis = transform.Basis.Rotated(new Vector3(0, 0, 1), rot.Z);
+        return transform;
     }
 
-    public void boneItt3(MdlFrame frame, int bonesCount)
+    public void boneItt3(MdlFrame frame)
     {
-        for (int boneIdx = 0; boneIdx < bonesCount; boneIdx++)
+        for (int boneIdx = 0; boneIdx < bones.Count; boneIdx++)
         {
             Vector3 boneRot = bones[boneIdx].rot;
             Vector3 bonePos = bones[boneIdx].pos;
             Vector3 framePos = frame.positions[boneIdx];
             Vector3 frameRot = frame.rotations[boneIdx];
 
-            bones[boneIdx].restTransform = ConvertTransform(bonePos, boneRot);
+            bones[boneIdx].restTransform = GetTransform(bonePos, boneRot);
 
-            Transform3D animatedTransform = ConvertTransform(bonePos + framePos, boneRot + frameRot);
+            Transform3D animatedTransform = GetTransform(bonePos + framePos, boneRot + frameRot);
             boneLocalTransforms.Add(animatedTransform);
             boneLocalTransformsInv.Add(animatedTransform.Inverse());
         }
 
-        for (int boneIdx = 0; boneIdx < bonesCount; boneIdx++)
+        for (int boneIdx = 0; boneIdx < bones.Count; boneIdx++)
         {
             Transform3D transform = boneLocalTransforms[boneIdx];
-
-            int parentIdx = (int)bones[boneIdx].parentIndex;
-
+            int parentIdx = bones[boneIdx].parentIndex;
             while (parentIdx >= 0)
             {
-                transform *= boneLocalTransforms[parentIdx];
-                parentIdx = (int)bones[parentIdx].parentIndex;
+                transform = boneLocalTransforms[parentIdx] * transform;
+                parentIdx = bones[parentIdx].parentIndex;
             }
             bones[boneIdx].transform = transform;
         }
@@ -718,7 +716,7 @@ public partial class MDL : DataPack
         // Create transform arrays
         boneLocalTransforms = new Array<Transform3D>();
         boneLocalTransformsInv = new Array<Transform3D>();
-        boneItt3(sequences[0].blends[0].frames[0], bones.Count);
+        boneItt3(sequences[0].blends[0].frames[0]);
         // Parse bodyParts
         bodyParts = new Array<MdlBodyPart>();
         fs.Seek(header.bodyPartsOffset, SeekOrigin.Begin);
@@ -735,9 +733,8 @@ public partial class MDL : DataPack
         }
         for (int boneIdx = 0; boneIdx < bones.Count; boneIdx++)
         {
-            MdlBone bone = bones[boneIdx];
-            int sBoneIdx = skeletonNode.FindBone(bone.name);
-            skeletonNode.SetBoneParent(sBoneIdx, (int)bone.parentIndex);
+            int sBoneIdx = skeletonNode.FindBone(bones[boneIdx].name);
+            skeletonNode.SetBoneParent(sBoneIdx, bones[boneIdx].parentIndex);
             skeletonNode.SetBoneRest(sBoneIdx, boneLocalTransforms[boneIdx]);
             skeletonNode.SetBonePosePosition(sBoneIdx, boneLocalTransforms[boneIdx].Origin);
             skeletonNode.SetBonePoseRotation(sBoneIdx, boneLocalTransforms[boneIdx].Basis.GetRotationQuaternion());
@@ -767,8 +764,7 @@ public partial class MDL : DataPack
 
             for (int boneIdx = 0; boneIdx < header.bonesCount; boneIdx++)
             {
-                var bone = bones[boneIdx];
-                var animParentPath = "../" + skeletonNode.Name + ":" + bone.name;
+                var animParentPath = "../" + skeletonNode.Name + ":" + bones[boneIdx].name;
                 var trackPosIdx = anim.AddTrack(Animation.TrackType.Position3D);
                 var trackRotIdx = anim.AddTrack(Animation.TrackType.Rotation3D);
                 var trackScaleIdx = anim.AddTrack(Animation.TrackType.Scale3D);
@@ -778,18 +774,18 @@ public partial class MDL : DataPack
 
                 for (int frame = 0; frame < seq.frameCount; frame++)
                 {
-                    var frameData = seq.blends[0].frames[frame];
-                    var pos = bone.pos + frameData.positions[boneIdx];
-                    var rot = bone.rot + frameData.rotations[boneIdx];
+                    MdlFrame frameData = seq.blends[0].frames[frame];
+                    Vector3 pos = bones[boneIdx].pos + frameData.positions[boneIdx];
+                    Vector3 rot = bones[boneIdx].rot + frameData.rotations[boneIdx];
 
-                    Transform3D transform = boneLocalTransforms[boneIdx] * (boneLocalTransformsInv[boneIdx] * ConvertTransform(pos, rot));
+                    Transform3D transform = boneLocalTransforms[boneIdx] * (boneLocalTransformsInv[boneIdx] * GetTransform(pos, rot));
 
                     transform.Translated(pos);
-                    var rotQuat = transform.Basis.GetRotationQuaternion();
+                    Quaternion rotQuat = transform.Basis.GetRotationQuaternion();
 
-                    var keyLocation = Vector3.Zero;
-                    var keyRotation = Quaternion.Identity;
-                    var keyScale = new Vector3(1, 1, 1);
+                    Vector3 keyLocation = Vector3.Zero;
+                    Quaternion keyRotation = Quaternion.Identity;
+                    Vector3 keyScale = new Vector3(1, 1, 1);
                     if (transform.Origin != keyLocation || keyRotation != rotQuat)
                     {
                         keyLocation = transform.Origin;

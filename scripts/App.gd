@@ -64,7 +64,7 @@ func openAsset(filePath, parent):
     Log.info("Loading %s..." % filePath);
     #Allow some time for the dialog to close
     await get_tree().create_timer(0.75).timeout;
-    var metadata = Metadata.new();
+    var metadata = get_node("/root/App/Importer");
     metadata.Discover(filePath);
     if !metadata:
         Log.error("Failed loading file");
