@@ -73,6 +73,8 @@ func openAsset(filePath, parent):
     if !asset:
         Log.error("Failed loading file");
         return;
+    if asset.type == "Model":
+        asset.BuildGDModel(files);
     files.push_back(asset);
     var entry = filesTree.create_item(parent if parent else filesTree.get_root());
     entry.set_text(0, asset.GetFileName());

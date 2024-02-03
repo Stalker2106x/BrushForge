@@ -2,27 +2,22 @@ using Godot;
 using Godot.Collections;
 using System;
 using System.IO;
-using System.Text;
-using System.Text.RegularExpressions;
-using static Godot.RenderingServer;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Net.WebRequestMethods;
 
 public partial class GoldSrcBSP : DataPack
 {
     private string skyName;
     private Vector3 startOrigin;
 
-    private Godot.Collections.Dictionary<string, Lump> lumps;
-    private Godot.Collections.Array<Face> faces;
-    private Godot.Collections.Array<Model> models;
-    private Godot.Collections.Array<Plane> planes;
-    private Godot.Collections.Array<TextureInfo> textureInfos;
-    private Godot.Collections.Array<Texture> textures;
-    private Godot.Collections.Array<Vector3> vertices;
-    private Godot.Collections.Array<Edge> edges;
-    private Godot.Collections.Array<Int32> surfedges;
-    private Godot.Collections.Array<Variant> entities;
+    private Dictionary<string, Lump> lumps;
+    private Array<Face> faces;
+    private Array<Model> models;
+    private Array<Plane> planes;
+    private Array<TextureInfo> textureInfos;
+    private Array<Texture> textures;
+    private Array<Vector3> vertices;
+    private Array<Edge> edges;
+    private Array<Int32> surfedges;
+    private Array<Variant> entities;
 
     /* The file starts with an array of entries for the so-called lumps.
      * A lump is more or less a section of the file containing a specific
@@ -109,7 +104,7 @@ public partial class GoldSrcBSP : DataPack
             vs = ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()), false);
             sShift = reader.ReadSingle();
 
-            vt = DataPack.ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()), false);
+            vt = ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()), false);
             tShift = reader.ReadSingle();
         
             textureIndex = reader.ReadUInt32();
@@ -147,7 +142,7 @@ public partial class GoldSrcBSP : DataPack
         {
             mins = new float[3] { reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle() };
             maxs = new float[3] { reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle() };
-            origin = DataPack.ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            origin = ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
             headNodes = new UInt32[4] { reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32() };
             visLeafs = reader.ReadUInt32();
             faceIndex = reader.ReadUInt32();
@@ -166,7 +161,7 @@ public partial class GoldSrcBSP : DataPack
         
         public Plane(FileStream fs, BinaryReader reader)
         {
-            normal = DataPack.ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            normal = ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
             dist = reader.ReadSingle();
             type = reader.ReadUInt32();
         }
@@ -207,12 +202,12 @@ public partial class GoldSrcBSP : DataPack
     {
         base.Import(fs, reader);
         // Here we should be just after the header
-        lumps = new Godot.Collections.Dictionary<string, Lump>();
+        lumps = new Dictionary<string, Lump>();
         for (int i = 0; i < Lump.Def.Length; i++) {
             lumps[Lump.Def[i]] = new Lump(fs, reader);
         }
         // Parse Entities
-        entities = new Godot.Collections.Array<Variant>();
+        entities = new Array<Variant>();
         fs.Seek(lumps["Entities"].offset, SeekOrigin.Begin);
         string[] rawEntities = ExtractString(reader.ReadBytes((int)lumps["Entities"].length)).Replace("\" \"", "\": \"").Replace("\"\n\"", "\",\"").Replace("\\", "/").Replace("\n", "").Split('}');
         foreach (string rawEntity in rawEntities)
@@ -221,31 +216,31 @@ public partial class GoldSrcBSP : DataPack
             entities.Add(Json.ParseString(rawEntity + "}"));
         }
         // Parse Faces
-        faces = new Godot.Collections.Array<Face>();
+        faces = new Array<Face>();
         fs.Seek(lumps["Faces"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["Faces"].offset + lumps["Faces"].length) {
             faces.Add(new Face(fs, reader));
         }
         // Parse TextureInfo
-        textureInfos = new Godot.Collections.Array<TextureInfo>();
+        textureInfos = new Array<TextureInfo>();
         fs.Seek(lumps["TextureInfo"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["TextureInfo"].offset + lumps["TextureInfo"].length) {
             textureInfos.Add(new TextureInfo(fs, reader));
         }
         // Parse Models
-        models = new Godot.Collections.Array<Model>();
+        models = new Array<Model>();
         fs.Seek(lumps["Models"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["Models"].offset + lumps["Models"].length) {
             models.Add(new Model(fs, reader));
         }
         // Parse Planes
-        planes = new Godot.Collections.Array<Plane>();
+        planes = new Array<Plane>();
         fs.Seek(lumps["Planes"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["Planes"].offset + lumps["Planes"].length) {
             planes.Add(new Plane(fs, reader));
         }
         // Parse Textures
-        textures = new Godot.Collections.Array<Texture>();
+        textures = new Array<Texture>();
         fs.Seek(lumps["Textures"].offset, SeekOrigin.Begin);
         UInt32 texturesCount = reader.ReadUInt32();       // Number of BSPMIPTEX structures
         UInt32[] texturesOffsets = new UInt32[texturesCount]; // Distance in bytes from the beginning of the texture lump to each of the texture structs
@@ -257,28 +252,28 @@ public partial class GoldSrcBSP : DataPack
             textures.Add(new Texture(fs, reader));
         }
         // Parse vertices
-        vertices = new Godot.Collections.Array<Vector3>();
+        vertices = new Array<Vector3>();
         fs.Seek(lumps["Vertices"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["Vertices"].offset + lumps["Vertices"].length) {
-            vertices.Add(DataPack.ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle())));
+            vertices.Add(ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle())));
         }
         // Parse Edges
-        edges = new Godot.Collections.Array<Edge>();
+        edges = new Array<Edge>();
         fs.Seek(lumps["Edges"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["Edges"].offset + lumps["Edges"].length) {
             edges.Add(new Edge(fs, reader));
         }
         // Parse SurfEdges
-        surfedges = new Godot.Collections.Array<Int32>();
+        surfedges = new Array<Int32>();
         fs.Seek(lumps["Surfedges"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["Surfedges"].offset + lumps["Surfedges"].length) {
             surfedges.Add(reader.ReadInt32());
         }
     }
     
-    override public Godot.Collections.Array<Variant> GetLevels()
+    override public Array<Variant> GetLevels()
     {
-        return new Godot.Collections.Array<Variant>() { GetFileName() };
+        return new Array<Variant>() { GetFileName() };
     }
     public Vector3 GetLevelStart()
     {
@@ -286,12 +281,12 @@ public partial class GoldSrcBSP : DataPack
     }
 
 
-    override public Godot.Collections.Array<Variant> GetEntities()
+    override public Array<Variant> GetEntities()
     {
         return entities;
     }
 
-    public Texture2D[] GetSkyCubemapTextures(Godot.Collections.Array<Asset> files)
+    public Texture2D[] GetSkyCubemapTextures(Array<Asset> files)
     {
         string[] cubemapSuffixes = new string[] { "LF", "BK", "RT", "FT", "UP", "DN" };
         Texture2D[] cubemapTextures = new Texture2D[cubemapSuffixes.Length];
@@ -310,7 +305,7 @@ public partial class GoldSrcBSP : DataPack
         return cubemapTextures;
     }
 
-    override public Node3D BuildGDLevel(string levelId, string shading, Godot.Collections.Array<Asset> files)
+    override public Node3D BuildGDLevel(string levelId, string shading, Array<Asset> files)
     {
         Material NotFoundMaterial = GD.Load<StandardMaterial3D>("res://materials/NotfoundMaterial.tres");
         // Level
@@ -318,7 +313,7 @@ public partial class GoldSrcBSP : DataPack
         mapNode.Name = "Map";
         ArrayMesh skyMesh = new ArrayMesh();
         for (int modelIdx = 0; modelIdx < models.Count; modelIdx++) {
-            Godot.Collections.Dictionary<string, SurfaceTool> surfaceTools = new Godot.Collections.Dictionary<string, SurfaceTool>();
+            Dictionary<string, SurfaceTool> surfaceTools = new Dictionary<string, SurfaceTool>();
             UInt32 faceEnd = models[modelIdx].faceIndex + models[modelIdx].faceCount;
             for (UInt32 faceIdx = models[modelIdx].faceIndex; faceIdx < faceEnd; faceIdx++) {
                 Face face = faces[(int)faceIdx];
@@ -425,9 +420,9 @@ public partial class GoldSrcBSP : DataPack
         return mapNode;
     }
 
-    public void ParseEntities(Node3D mapNode, Godot.Collections.Array<Asset> files)
+    public void ParseEntities(Node3D mapNode, Array<Asset> files)
     {
-        Godot.Collections.Dictionary<string, Variant> targets = new Godot.Collections.Dictionary<string, Variant>();
+        Dictionary<string, Variant> targets = new Dictionary<string, Variant>();
         Node3D pointEntitiesNode = new Node3D();
         pointEntitiesNode.Name = "PointEntities";
         mapNode.AddChild(pointEntitiesNode);
@@ -438,7 +433,7 @@ public partial class GoldSrcBSP : DataPack
         pathsNode.Name = "Paths";
         mapNode.AddChild(pathsNode);
         // First pass, setup things
-        foreach (Godot.Collections.Dictionary<string, string> entity in entities)
+        foreach (Dictionary<string, string> entity in entities)
         {
             if (entity.ContainsKey("CLASSNAME"))
             {
@@ -452,7 +447,7 @@ public partial class GoldSrcBSP : DataPack
             }
         }
         // Second pass, lets do magic
-        foreach (Godot.Collections.Dictionary<string, string> entity in entities)
+        foreach (Dictionary<string, string> entity in entities)
         {
             Node3D entityNode = null;
             Node3D child = null;

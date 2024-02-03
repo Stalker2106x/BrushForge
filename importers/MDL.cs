@@ -2,7 +2,6 @@ using Godot;
 using Godot.Collections;
 using System;
 using System.IO;
-using static IDSP;
 
 public partial class MDL : DataPack
 {
@@ -56,11 +55,11 @@ public partial class MDL : DataPack
         {
             name = ExtractString(reader.ReadBytes(64));
             size = reader.ReadUInt32();
-            eyesPosition = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            min = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            max = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            bbMin = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            bbMax = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            eyesPosition = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            min = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            max = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            bbMin = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            bbMax = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
             flags = reader.ReadUInt32();
             bonesCount = reader.ReadUInt32();
             bonesOffset = reader.ReadUInt32();
@@ -123,10 +122,10 @@ public partial class MDL : DataPack
                 reader.ReadUInt32(),
                 reader.ReadUInt32()
             };
-            pos = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            rot = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            posScale = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            rotScale = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            pos = ConvertVectorMDL2(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            rot = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            posScale = ConvertVectorMDL2(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            rotScale = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
             index = boneIndex;
             transform = Transform3D.Identity;
         }
@@ -184,8 +183,8 @@ public partial class MDL : DataPack
 
                 for (var j = 0; j < sequence.frameCount; j++)
                 {
-                    frames[j].positions[bone] = new Vector3(boneValues[0][j], boneValues[1][j], boneValues[2][j]) * bones[bone].posScale;
-                    frames[j].rotations[bone] = new Vector3(boneValues[3][j], boneValues[4][j], boneValues[5][j]) * bones[bone].rotScale;
+                    frames[j].positions[bone] = ConvertVectorMDL2(new Vector3(boneValues[0][j], boneValues[1][j], boneValues[2][j])) * bones[bone].posScale;
+                    frames[j].rotations[bone] = ConvertVectorMDL(new Vector3(boneValues[3][j], boneValues[4][j], boneValues[5][j])) * bones[bone].rotScale;
                 }
             }
         }
@@ -196,7 +195,7 @@ public partial class MDL : DataPack
         public Vector3[] positions;
         public Vector3[] rotations;
 
-        public static short[] ReadAnimationFrameValues(BinaryReader reader, int count)
+        public static short[] ReadAnimationFrameValues(BinaryReader reader, int frameCount)
         {
             /*
              * RLE data:
@@ -204,19 +203,20 @@ public partial class MDL : DataPack
              * byte uncompressed_length - uncompressed number of values in run
              * short values[compressed_length] - values in the run, the last value is repeated to reach the uncompressed length
              */
-            var values = new short[count];
+            var values = new short[frameCount];
 
-            for (var i = 0; i < count; /* i = i */)
+            for (var frame = 0; frame < frameCount;)
             {
-                var run = reader.ReadBytes(2); // read the compressed and uncompressed lengths
+                UInt16 compressedLength = reader.ReadByte(); // read the compressed
+                UInt16 uncompressedLength = reader.ReadByte(); // and uncompressed lengths
 
-                Int16[] vals = new Int16[run[0]];
-                for (int v = 0; v < run[0]; v++)
+                Int16[] vals = new Int16[compressedLength];
+                for (int v = 0; v < compressedLength; v++)
                     vals[v] = reader.ReadInt16();
-                for (var j = 0; j < run[1] && i < count; i++, j++)
+                for (var j = 0; j < uncompressedLength && frame < frameCount; frame++, j++)
                 {
-                    var idx = Math.Min(run[0] - 1, j); // value in the data or the last value if we're past the end
-                    values[i] = vals[idx];
+                    var idx = Math.Min(compressedLength - 1, j); // value in the data or the last value if we're past the end
+                    values[frame] = (uncompressedLength > 0 && compressedLength <= 0 ? (short)0 : vals[idx]);
                 }
             }
 
@@ -276,11 +276,11 @@ public partial class MDL : DataPack
             pivotOffset = reader.ReadUInt32();
             motionType = reader.ReadUInt32();
             motionBone = reader.ReadUInt32();
-            linearMovement = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            linearMovement = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
             autoMovePosIndex = reader.ReadUInt32();
             autoMoveAngleIndex = reader.ReadUInt32();
-            bbmin = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-            bbmax = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            bbmin = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            bbmax = ConvertVectorMDL(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
             blendCount = reader.ReadUInt32();
             animationOffset = reader.ReadUInt32();
             blendType = new UInt32[2] { reader.ReadUInt32(), reader.ReadUInt32() };
@@ -412,7 +412,7 @@ public partial class MDL : DataPack
             }
         }
 
-        public ArrayMesh Build(Array<MdlBone> bones, Dictionary<string, Texture2D> gdTextures, Vector3[] allVertices, Vector3[] allNormals, Byte[] boneIndexes)
+        public ArrayMesh Build(Array<Asset> files, string selfName, Dictionary<string, Texture2D> gdTextures, Vector3[] allVertices, Vector3[] allNormals, Byte[] boneIndexes)
         {
             SurfaceTool sfTool = new SurfaceTool();
             sfTool.Begin(Mesh.PrimitiveType.Triangles);
@@ -460,9 +460,33 @@ public partial class MDL : DataPack
                 }
             }
             ArrayMesh mesh = null;
-            Array<string> keys = gdTextures.Keys as Array<string>;
-            Texture2D texture = gdTextures[keys[(int)skinRef]];
             StandardMaterial3D mat = new StandardMaterial3D();
+            Texture2D texture = null;
+            // In MDLs, texture might be located outside, in another MDL file.
+            // When the MDL holds only model and anims, it has zero textures inside.
+            // Usually, the file containing textures has the same prefix but ends with "t"
+            if (gdTextures.Keys.Count == 0)
+            {
+                RegEx regex = RegEx.CreateFromString("[0-9]?[0-9]?.mdl");
+                string tFilename = regex.Sub(selfName, "") + "t";
+                for (int fileId = 0; fileId < files.Count; fileId++)
+                {
+                    if (files[fileId].GetFileName().Replace(".mdl", "") == tFilename)
+                    {
+                        Array<string> keys = files[fileId].gdTextures.Keys as Array<string>;
+                        texture = files[fileId].gdTextures[keys[(int)skinRef]];
+                    }
+                }
+                if (texture == null) //No file matched, apply missingTex
+                {
+                    texture = GD.Load<Texture2D>("res://assets/NotFound.png");
+                }
+            }
+            else // Texture embedded here
+            {
+                Array<string> keys = gdTextures.Keys as Array<string>;
+                texture = gdTextures[keys[(int)skinRef]];
+            }
             mat.Uv1Scale /= new Vector3(texture.GetWidth(), texture.GetHeight(), 1);
             mat.AlbedoTexture = texture;
             sfTool.SetMaterial(mat);
@@ -518,14 +542,14 @@ public partial class MDL : DataPack
             vertices = new Vector3[verticesCount];
             for (int i = 0; i < verticesCount; i++)
             {
-                vertices[i] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                vertices[i] = ConvertVectorMDL2(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
             }
             // Parse normals
             fs.Seek(normalsOffset, SeekOrigin.Begin);
             normals = new Vector3[normalsCount];
             for (int i = 0; i < normalsCount; i++)
             {
-                normals[i] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                normals[i] = ConvertVectorMDL2(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
             }
             // Parse boneIndexes
             fs.Seek(verticesInfoOffset, SeekOrigin.Begin);
@@ -543,7 +567,7 @@ public partial class MDL : DataPack
             }
         }
 
-        public void Build(Node3D modelNode, Array<MdlBone> bones, Dictionary<string, Texture2D> gdTextures)
+        public void Build(Array<Asset> files, string selfName, Node3D modelNode, Array<MdlBone> bones, Dictionary<string, Texture2D> gdTextures)
         {
             // Apply transform
             for (int i = 0; i < vertices.Length; i++)
@@ -555,7 +579,7 @@ public partial class MDL : DataPack
             {
                 MeshInstance3D meshInstance = new MeshInstance3D();
                 meshInstance.Name = name;
-                meshInstance.Mesh = mesh.Build(bones, gdTextures, vertices, normals, boneIndexes);
+                meshInstance.Mesh = mesh.Build(files, selfName, gdTextures, vertices, normals, boneIndexes);
                 modelNode.AddChild(meshInstance);
             }
         }
@@ -578,7 +602,7 @@ public partial class MDL : DataPack
             modelsOffset = reader.ReadUInt32();
         }
 
-        public void Parse(FileStream fs, BinaryReader reader, Array<MdlBone> bones)
+        public void Parse(FileStream fs, BinaryReader reader)
         {
             // Parse models
             fs.Seek(modelsOffset, SeekOrigin.Begin);
@@ -593,11 +617,11 @@ public partial class MDL : DataPack
             }
         }
 
-        public void Build(Node3D modelNode, Array<MdlBone> bones, Dictionary<string, Texture2D> gdTextures)
+        public void Build(Array<Asset> files, string selfName, Node3D modelNode, Array<MdlBone> bones, Dictionary<string, Texture2D> gdTextures)
         {
             foreach (MdlModel model in models)
             {
-                model.Build(modelNode, bones, gdTextures);
+                model.Build(files, selfName, modelNode, bones, gdTextures);
             }
         }
     }
@@ -644,7 +668,7 @@ public partial class MDL : DataPack
         return transform;
     }
 
-    public void boneItt3(MdlFrame frame)
+    public void GenerateBoneTransforms(MdlFrame frame)
     {
         for (int boneIdx = 0; boneIdx < bones.Count; boneIdx++)
         {
@@ -693,7 +717,7 @@ public partial class MDL : DataPack
             {
                 img.SetPixel((int)(i % texture.width), (int)(i / texture.width), texture.colorPalette[texture.data[i]]);
             }
-            gdTextures[texture.name] = ImageTexture.CreateFromImage(img);
+            gdTextures[texture.name.Replace(".BMP", "")] = ImageTexture.CreateFromImage(img);
         }
         // Parse bones
         bones = new Array<MdlBone>();
@@ -713,10 +737,6 @@ public partial class MDL : DataPack
         {
             sequence.Build(fs, reader, bones);
         }
-        // Create transform arrays
-        boneLocalTransforms = new Array<Transform3D>();
-        boneLocalTransformsInv = new Array<Transform3D>();
-        boneItt3(sequences[0].blends[0].frames[0]);
         // Parse bodyParts
         bodyParts = new Array<MdlBodyPart>();
         fs.Seek(header.bodyPartsOffset, SeekOrigin.Begin);
@@ -724,8 +744,24 @@ public partial class MDL : DataPack
         {
             bodyParts.Add(new MdlBodyPart(fs, reader));
         }
+        foreach (MdlBodyPart bodyPart in bodyParts)
+        {
+            bodyPart.Parse(fs, reader);
+        }
+    }
+
+    public void BuildGDModel(Array<Asset> files)
+    {
+        // Create transform arrays
+        boneLocalTransforms = new Array<Transform3D>();
+        boneLocalTransformsInv = new Array<Transform3D>();
+        if (sequences.Count > 0)
+        {
+            GenerateBoneTransforms(sequences[0].blends[0].frames[0]);
+        }
         // Build Skel
         Skeleton3D skeletonNode = new Skeleton3D();
+        skeletonNode.RotationOrder = EulerOrder.Yzx;
         skeletonNode.Name = "Model";
         foreach (MdlBone bone in bones)
         {
@@ -797,14 +833,9 @@ public partial class MDL : DataPack
                 }
             }
         }
-        // Build Mesh
         foreach (MdlBodyPart bodyPart in bodyParts)
         {
-            bodyPart.Parse(fs, reader, bones);
-        }
-        foreach (MdlBodyPart bodyPart in bodyParts)
-        {
-            bodyPart.Build(skeletonNode, bones, gdTextures);
+            bodyPart.Build(files, GetFileName(), skeletonNode, bones, gdTextures);
         }
         animPlayer.AddAnimationLibrary("", animLibrary);
         skeletonNode.AddChild(animPlayer);
