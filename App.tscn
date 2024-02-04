@@ -1,8 +1,9 @@
-[gd_scene load_steps=20 format=3 uid="uid://c311sqhtsypw0"]
+[gd_scene load_steps=21 format=3 uid="uid://c311sqhtsypw0"]
 
 [ext_resource type="Theme" uid="uid://dnjcqtp4bxqiq" path="res://Theme.tres" id="1_txdw7"]
 [ext_resource type="Script" path="res://scripts/App.gd" id="1_w7gbj"]
 [ext_resource type="Script" path="res://scripts/TitleBar.gd" id="3_1oohy"]
+[ext_resource type="Script" path="res://importers/Metadata.cs" id="3_o71nc"]
 [ext_resource type="Script" path="res://scripts/3DView.gd" id="4_r574j"]
 [ext_resource type="PackedScene" uid="uid://bqe5vceku10ff" path="res://prefabs/Camera.tscn" id="5_4mito"]
 [ext_resource type="Script" path="res://scripts/TexturePanel.gd" id="5_qwuqx"]
@@ -37,6 +38,9 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("1_txdw7")
 script = ExtResource("1_w7gbj")
+
+[node name="Importer" type="Node" parent="."]
+script = ExtResource("3_o71nc")
 
 [node name="BG" type="ColorRect" parent="."]
 layout_mode = 1
@@ -344,7 +348,7 @@ always_on_top = true
 ok_button_text = "Ouvrir"
 file_mode = 1
 access = 2
-filters = PackedStringArray("*.bsp, *.wad, *.pk3", "*.spr, *.bmp, *.tga", "*.wav, *.mp3")
+filters = PackedStringArray("*.bsp, *.wad, *.mdl, *.spr, *.bmp, *.wav ; Supported Files")
 use_native_dialog = true
 
 [node name="FolderDialog" type="FileDialog" parent="."]

@@ -22,4 +22,12 @@ func mergeImages(images : Array, columns : int):
             var px = images[(x / oneSize.x) + ((y / oneSize.y) * columns)].get_pixel(x % oneSize.x, y % oneSize.y);
             result.set_pixel(x, y, px);
     return result;
-            
+
+func getTransform(pos, rot):
+    var t = Transform3D.IDENTITY
+    t.origin = pos 
+    t.basis = t.basis.rotated(Vector3(1,0,0), rot.x)
+    t.basis = t.basis.rotated(Vector3(0,1,0), rot.y)
+    t.basis = t.basis.rotated(Vector3(0,0,1), rot.z)
+    print(t)
+    return t

@@ -116,6 +116,8 @@ func reloadLevel():
         unload();
     var files = get_node("/root/App").files;
     var mapNode = currentLevelFile.BuildGDLevel("", shading, files);
+    if (mapNode == null):
+        return;
     worldContainer.add_child(mapNode);
     applySettings();
     #get_node("Viewport/World/VoxelGI").bake(get_node("Viewport/World/Container"));

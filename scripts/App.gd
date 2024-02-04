@@ -64,7 +64,7 @@ func openAsset(filePath, parent):
     Log.info("Loading %s..." % filePath);
     #Allow some time for the dialog to close
     await get_tree().create_timer(0.75).timeout;
-    var metadata = Metadata.new();
+    var metadata = get_node("/root/App/Importer");
     metadata.Discover(filePath);
     if !metadata:
         Log.error("Failed loading file");
@@ -73,6 +73,8 @@ func openAsset(filePath, parent):
     if !asset:
         Log.error("Failed loading file");
         return;
+    if asset.type == "Model":
+        asset.BuildGDModel(files);
     files.push_back(asset);
     var entry = filesTree.create_item(parent if parent else filesTree.get_root());
     entry.set_text(0, asset.GetFileName());

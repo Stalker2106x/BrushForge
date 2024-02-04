@@ -18,6 +18,7 @@ public partial class Asset : Node
 
     public Godot.Collections.Dictionary<string, Texture2D> gdTextures;
     public Godot.Collections.Dictionary<string, AudioStream> gdSounds;
+    public Node3D gdModel;
 
     public Asset()
     {
