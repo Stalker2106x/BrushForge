@@ -67,6 +67,8 @@ public partial class GoldSrcBSP : DataPack
     
         public byte[] lightmapStyles;   // styles (bit flags) for the lightmaps
         public UInt32 lightmapOffset;   // offset of the lightmap (in bytes) in the lightmap lump
+
+        public Texture2D lightmapTexture; // CREATED: parsed lightmap
         
         public Face(FileStream fs, BinaryReader reader)
         {
@@ -83,17 +85,32 @@ public partial class GoldSrcBSP : DataPack
             };
             lightmapOffset = reader.ReadUInt32();
         }
+
+        public void BuildLightmap(FileStream fs, BinaryReader reader, UInt32 lmOffset, Array<TextureInfo> texInfos, Array<Texture> texs)
+        {
+            Texture texInfo = texs[(int)texInfos[texInfoIndex].textureIndex];
+            fs.Seek(lmOffset + lightmapOffset, SeekOrigin.Begin);
+            Vector2I lightMapRes = new Vector2I((int)Math.Round(texInfo.width / 16.0f), (int)Math.Round(texInfo.height / 16.0f));
+
+            Image img = Image.Create(lightMapRes.X, lightMapRes.Y, false, Image.Format.Rgb8);
+            for (int i = 0; i < lightMapRes.X * lightMapRes.Y; i++)
+            {
+                Color pixelData = new Color(reader.ReadByte() / 255.0f, reader.ReadByte() / 255.0f, reader.ReadByte() / 255.0f);
+                img.SetPixel((i % lightMapRes.X), (i / lightMapRes.Y), pixelData);
+            }
+            lightmapTexture = ImageTexture.CreateFromImage(img);
+        }
     }
-    
+
     /* The texinfo lump contains informations about how textures are applied to surfaces.
      * The lump itself is an array of binary data structures.
      */
     private partial class TextureInfo : GodotObject
     {
-        public Vector3 vs;
+        public Vector3 vs;     // UV s coordinate
         public float   sShift; // Texture shift in s direction
 
-        public Vector3 vt;
+        public Vector3 vt;     // UV t coordinate
         public float   tShift; // Texture shift in t direction
        
         public UInt32  textureIndex; // Index of corresponding texture in texture lump
@@ -269,6 +286,11 @@ public partial class GoldSrcBSP : DataPack
         while (fs.Position < lumps["Surfedges"].offset + lumps["Surfedges"].length) {
             surfedges.Add(reader.ReadInt32());
         }
+        // Build lightmap
+        foreach (Face face in faces)
+        {
+            face.BuildLightmap(fs, reader, lumps["Lighting"].offset, textureInfos, textures);
+        }
     }
     
     override public Array<Variant> GetLevels()
@@ -326,7 +348,7 @@ public partial class GoldSrcBSP : DataPack
                     faceTextureName = texture.textureName;
                 }
                 // Create one surfaceTool per texture
-                SurfaceTool surfaceTool = null;
+                SurfaceTool surfaceTool;
                 if (surfaceTools.ContainsKey(faceTextureName)) {
                     surfaceTool = surfaceTools[faceTextureName];
                 } else {
@@ -356,7 +378,8 @@ public partial class GoldSrcBSP : DataPack
                         }
                     } else if (shading == "shaded") {
                         material = new StandardMaterial3D();
-                        (material as StandardMaterial3D).AlbedoColor = new Color((float)GD.RandRange(0.0f, 1.0f), (float)GD.RandRange(0.0f, 1.0f), (float)GD.RandRange(0.0f, 1.0f));
+                        (material as StandardMaterial3D).AlbedoTexture = face.lightmapTexture;
+                        //(material as StandardMaterial3D).AlbedoColor = new Color((float)GD.RandRange(0.0f, 1.0f), (float)GD.RandRange(0.0f, 1.0f), (float)GD.RandRange(0.0f, 1.0f));
                     } else if (shading == "wireframe") {
                         material = GD.Load<ShaderMaterial>("res://materials/WireframeMaterial.tres");
                     }
@@ -367,8 +390,8 @@ public partial class GoldSrcBSP : DataPack
                 }
                 // Compute faces
                 Vector3 faceNormal = face.planeSide != 0 ? -planes[face.planeIndex].normal : planes[face.planeIndex].normal;
-                float texScaleX = (1.0f / (UNIT_SCALE * texture.width));
-                float texScaleY = (1.0f / (UNIT_SCALE * texture.height));
+                Vector2 texSize = new Vector2(texture.width, texture.height) * (shading == "shaded" ? 16.0f : 1.0f);
+                Vector2 texScale = new Vector2(1.0f / (UNIT_SCALE * texSize.X), 1.0f / (UNIT_SCALE * texSize.Y));
                 Vector3[] faceVertices = new Vector3[face.surfedgeCount];
                 Vector2[] faceUVs = new Vector2[face.surfedgeCount];
                 Vector3[] faceNormals = new Vector3[face.surfedgeCount];
@@ -378,8 +401,8 @@ public partial class GoldSrcBSP : DataPack
                     Vector3 vertex = surfedge >= 0 ? vertices[(int)edge.verticesIndex[0]] : vertices[(int)edge.verticesIndex[1]];
                     faceVertices[seIdx] = vertex;
                     faceUVs[seIdx] = new Vector2(
-                        vertex.Dot(texinfo.vs) * texScaleX + texinfo.sShift / texture.width,
-                        vertex.Dot(texinfo.vt) * texScaleY + texinfo.tShift / texture.height
+                        vertex.Dot(texinfo.vs) * texScale.X + texinfo.sShift / texSize.X,
+                        vertex.Dot(texinfo.vt) * texScale.Y + texinfo.tShift / texSize.Y
                     );
                     faceNormals[seIdx] = faceNormal;
                 }
