@@ -423,33 +423,7 @@ public partial class MDL : DataPack
                 {
                     for (int summit = 0; summit < 3; summit++)
                     {
-                        // We have to populate surfacetool per triangle (3 vertex for each),
-                        // (1)  In triangle strips (/\/\/\), we iterate on current summit + the next two verts, because they are also part of the triangle.
-                        // (-1) In triangle fans (_\|/_), we iterate on first summit + the next two verts, because all triangles have the first summit of
-                        //      the whole array in common.
-                        // In both cases, we end with an offset of 2 to compensate.
-                        // We store the index of current summit in triangle fan vertex array in the "trivertIndex" variable
-                        int trivertIndex = -1;
-                        if (trianglePack.type == 1)
-                        {
-                            switch (summit)
-                            {
-                                case 0:
-                                    trivertIndex = i + 0;
-                                    break;
-                                case 1:
-                                    trivertIndex = i % 2 == 1 ? i + 2 : i + 1;
-                                    break;
-                                case 2:
-                                    trivertIndex = i % 2 == 1 ? i + 1 : i + 2;
-                                    break;
-                            }
-                        }
-                        else
-                        {
-                            trivertIndex = (summit == 0 ? 0 : i + summit);
-                        }
-
+                        int trivertIndex = GetSummitVertIndex(trianglePack.type, i, summit);
                         int vertexIndex = trianglePack.verticeIndexes[trivertIndex];
                         sfTool.SetNormal(allNormals[trianglePack.normalIndexes[trivertIndex]]);
                         sfTool.SetUV(new Vector2(trianglePack.s[trivertIndex], trianglePack.t[trivertIndex]));
@@ -697,7 +671,7 @@ public partial class MDL : DataPack
         }
     }
 
-    override public void Import(FileStream fs, BinaryReader reader)
+    override public void Import(FileStream fs, BinaryReader reader, Node app)
     {
         // Parse header
         header = new Header(fs, reader);

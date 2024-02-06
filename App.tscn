@@ -351,6 +351,15 @@ access = 2
 filters = PackedStringArray("*.bsp, *.wad, *.mdl, *.spr, *.bmp, *.wav ; Supported Files")
 use_native_dialog = true
 
+[node name="DependencyLoadDialog" type="ConfirmationDialog" parent="."]
+title = "Load Asset Dependency"
+initial_position = 2
+size = Vector2i(690, 106)
+ok_button_text = "Import"
+dialog_text = "The loaded asset relies on dependencies, do you want to proceed with importing them?
+NOTE: Skipping import may result in missing textures, sounds or scripts."
+cancel_button_text = "Skip"
+
 [node name="FolderDialog" type="FileDialog" parent="."]
 title = "Open a Directory"
 initial_position = 2

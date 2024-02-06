@@ -10,6 +10,7 @@ func fill(metadata, files):
     var textureList = get_node("ScrollContainer/TextureList");
     for child in textureList.get_children():
         child.queue_free();
+    return;
     for levelTexture in files[metadata.fileId].gdTextures:
         var entry = TextureEntryPrefab.instantiate();
         entry.get_node("Data/NameLabel").set_text(levelTexture.textureName);

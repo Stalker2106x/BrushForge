@@ -26,7 +26,7 @@ public partial class Asset : Node
         gdSounds = new Godot.Collections.Dictionary<string, AudioStream>();
     }
 
-    virtual public void Import(FileStream fs, BinaryReader reader)
+    virtual public void Import(FileStream fs, BinaryReader reader, Node app)
     {
     }
     

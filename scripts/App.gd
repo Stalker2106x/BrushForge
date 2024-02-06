@@ -1,5 +1,7 @@
 extends Control
 
+signal dependency_found
+
 const FileEntryPrefab = preload("res://prefabs/FileEntry.tscn");
 const Metadata = preload("res://importers/Metadata.cs");
 
@@ -7,9 +9,13 @@ var files = [];
 
 var filesTree;
 
+var importer; #Importer
+var gamePath;
+
 # Called when the node enters the scene tree for the first time.
 func _ready():
     Log.logNode = get_node("Layout/TabContainer/Logs/LogLabel");
+    importer = get_node("/root/App/Importer");
     #File UI
     get_node("FileDialog").connect("file_selected", Callable(self, "openAsset"));
     get_node("FileDialog").connect("files_selected", Callable(self, "openFiles"));
@@ -24,12 +30,19 @@ func _ready():
     var view3D = get_node("Layout/CenterLayout/Main/3DView");
     var levelSelect = get_node("Layout/CenterLayout/Main/Top/LevelSelect");
     levelSelect.connect("item_selected", Callable(self, "loadSelectedLevel"));
+    #Dependencies
+    var depsDialog = get_node("DependencyLoadDialog");
+    dependency_found.connect(Callable(depsDialog, "show"));
     # Files
     filesTree = get_node("Layout/CenterLayout/TabContainer/Files/ScrollContainer/FilesList");
     filesTree.connect("item_activated", Callable(self, "showFileContent"));
     filesTree.hide_root = true;
     var treeRoot = filesTree.create_item();
     treeRoot.set_text(0, "Files");
+    #Locate game install
+    gamePath = importer.LocateInstall();
+    if gamePath:
+        Log.info("Game located at %s" % gamePath);
 
 func showFileContent():
     var selectedItem = filesTree.get_selected();
@@ -64,12 +77,11 @@ func openAsset(filePath, parent):
     Log.info("Loading %s..." % filePath);
     #Allow some time for the dialog to close
     await get_tree().create_timer(0.75).timeout;
-    var metadata = get_node("/root/App/Importer");
-    metadata.Discover(filePath);
-    if !metadata:
+    importer.Discover(filePath);
+    if !importer:
         Log.error("Failed loading file");
         return; #Error loading metadata
-    var asset = metadata.ImportAsset();
+    var asset = importer.ImportAsset(self);
     if !asset:
         Log.error("Failed loading file");
         return;

@@ -3,7 +3,7 @@
 [node name="WADTextureEntry" type="VBoxContainer"]
 
 [node name="Texture" type="TextureRect" parent="."]
-texture_filter = 1
+texture_filter = 2
 custom_minimum_size = Vector2(128, 128)
 layout_mode = 2
 size_flags_horizontal = 4

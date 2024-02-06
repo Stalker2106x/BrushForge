@@ -1,7 +1,22 @@
-[gd_resource type="StandardMaterial3D" load_steps=2 format=3 uid="uid://dkgja6tywpjf0"]
+[gd_resource type="StandardMaterial3D" load_steps=6 format=3 uid="uid://dkgja6tywpjf0"]
 
 [ext_resource type="Texture2D" uid="uid://ca745gau4pb2f" path="res://assets/NotFound.png" id="1_yxhpd"]
 
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_nw3kg"]
+frequency = 0.0003
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_vvh8q"]
+noise = SubResource("FastNoiseLite_nw3kg")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_fq6w0"]
+frequency = 0.0005
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_0nr1v"]
+noise = SubResource("FastNoiseLite_fq6w0")
+
 [resource]
 albedo_texture = ExtResource("1_yxhpd")
-emission_enabled = true
+backlight_texture = SubResource("NoiseTexture2D_vvh8q")
+detail_blend_mode = 1
+detail_uv_layer = 1
+detail_albedo = SubResource("NoiseTexture2D_0nr1v")
