@@ -21,7 +21,7 @@ public partial class Metadata : Node
     {
         string steamInstallPath = null;
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            steamInstallPath = (string)Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Valve\\Steam", "InstallPath", null);
+            steamInstallPath = (Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Valve\\Steam", "InstallPath", null) as string).Replace("\\", "/");
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             steamInstallPath = System.Environment.GetEnvironmentVariable("HOME") + "/Library/Application\\ Support/Steam";
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -30,7 +30,7 @@ public partial class Metadata : Node
         {
             return null;
         }
-        return steamInstallPath.Replace("\\", "") + "/steamapps/common/Half-Life";
+        return steamInstallPath + "/steamapps/common/Half-Life";
     }
     public void Discover(string filePath)
     {

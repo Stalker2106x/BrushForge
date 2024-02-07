@@ -11,7 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://c3l2jlbt4fvbm" path="res://assets/Wireframe.png" id="7_w2248"]
 [ext_resource type="Texture2D" uid="uid://xiffgpg61xpa" path="res://assets/Shaded.png" id="8_rngdq"]
 [ext_resource type="Texture2D" uid="uid://d3xhssevy46uo" path="res://assets/Texturized.png" id="9_6ln17"]
-[ext_resource type="PackedScene" uid="uid://d4g3aeu7mo0v3" path="res://assets/TransformGIzmo.glb" id="10_p7x03"]
+[ext_resource type="PackedScene" uid="uid://d4g3aeu7mo0v3" path="res://assets/TransformGizmo.glb" id="10_p7x03"]
 [ext_resource type="Texture2D" uid="uid://d3claeraj5wk4" path="res://assets/crosshair.png" id="11_862x4"]
 [ext_resource type="Script" path="res://scripts/Inspector.gd" id="13_ortvp"]
 [ext_resource type="Texture2D" uid="uid://ct6krfvslra0v" path="res://assets/BrushForgeFull.png" id="14_eu4wb"]
