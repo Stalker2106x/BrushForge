@@ -23,14 +23,14 @@ public partial class Metadata : Node
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             steamInstallPath = (string)Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Valve\\Steam", "InstallPath", null);
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            steamInstallPath = "~/Library/Application Support/Steam/steamapps";
+            steamInstallPath = System.Environment.GetEnvironmentVariable("HOME") + "/Library/Application\\ Support/Steam";
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            steamInstallPath = "~/.local/share/Steam/steamapps";
+            steamInstallPath = System.Environment.GetEnvironmentVariable("HOME") + "/.local/share/Steam";
         if (steamInstallPath == null)
         {
             return null;
         }
-        return steamInstallPath + "\\steamapps\\common\\Half-Life";
+        return steamInstallPath.Replace("\\", "") + "/steamapps/common/Half-Life";
     }
     public void Discover(string filePath)
     {

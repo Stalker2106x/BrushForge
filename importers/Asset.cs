@@ -1,4 +1,5 @@
 using Godot;
+using Godot.Collections;
 using System;
 using System.IO;
 
@@ -20,8 +21,12 @@ public partial class Asset : Node
     public Godot.Collections.Dictionary<string, AudioStream> gdSounds;
     public Node3D gdModel;
 
+    public Array<string> dependencies;
+
     public Asset()
     {
+        dependencies = new Array<string>();
+
         gdTextures = new Godot.Collections.Dictionary<string, Texture2D>();
         gdSounds = new Godot.Collections.Dictionary<string, AudioStream>();
     }
