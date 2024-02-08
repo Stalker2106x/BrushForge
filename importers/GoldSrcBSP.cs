@@ -96,12 +96,11 @@ public partial class GoldSrcBSP : DataPack
             // No lightmap
             if (lightmapOffset < 0) return;
 
+            Vector2[] rawUVs = new Vector2[surfedgeCount];
             faceUVs = new Vector2[surfedgeCount];
             lmUVs = new Vector2[surfedgeCount];
-            Vector2 flooredMins = new Vector2(int.MaxValue, int.MaxValue);
-            Vector2 flooredMaxs = new Vector2(int.MinValue, int.MinValue);
-            Vector2 mins = new Vector2(int.MaxValue, int.MaxValue);
-            Vector2 maxs = new Vector2(int.MinValue, int.MinValue);
+            Vector2 fmins = new Vector2(int.MaxValue, int.MaxValue);
+            Vector2 fmaxs = new Vector2(int.MinValue, int.MinValue);
 
             // Generate texture coordinates for face
             TextureInfo texinfo = textureInfos[texInfoIndex];
@@ -110,52 +109,55 @@ public partial class GoldSrcBSP : DataPack
             {
                 int surfedge = surfedges[(int)(surfedgeIndex + edge)];
                 Vector3 vertex = vertices[(int)edges[Math.Abs(surfedge)].GetVerticeIndex(surfedge)];
-                Vector2 uv = new Vector2(
+                rawUVs[edge] = new Vector2(
                     (vertex.Dot(texinfo.vs) + texinfo.sShift),
                     (vertex.Dot(texinfo.vt) + texinfo.tShift)
                 );
                 // For faces, we need to apply texture scale to uvs.
-                faceUVs[edge] = new Vector2(uv.X / texture.width, uv.Y / texture.height);
-                // For some reason, when calculating lightmap UVs, u and v from face needs to be floored...
-                lmUVs[edge] = new Vector2(Mathf.Floor(uv.X), Mathf.Floor(uv.Y));
+                faceUVs[edge] = new Vector2(rawUVs[edge].X / texture.width, rawUVs[edge].Y / texture.height);
                 // We then extract min and max out of the floored values
-                if (lmUVs[edge].X < flooredMins.X) flooredMins.X = lmUVs[edge].X;
-                if (lmUVs[edge].X > flooredMaxs.X) flooredMaxs.X = lmUVs[edge].X;
-                if (lmUVs[edge].Y < flooredMins.Y) flooredMins.Y = lmUVs[edge].Y;
-                if (lmUVs[edge].Y > flooredMaxs.Y) flooredMaxs.Y = lmUVs[edge].Y;
-                // We then extract min and max out of the normal values
-                if (uv.X < mins.X) mins.X = uv.X;
-                if (uv.X > maxs.X) maxs.X = uv.X;
-                if (uv.Y < mins.Y) mins.Y = uv.Y;
-                if (uv.Y > maxs.Y) maxs.Y = uv.Y;
+                if (lmUVs[edge].X < fmins.X) fmins.X = lmUVs[edge].X;
+                if (lmUVs[edge].X > fmaxs.X) fmaxs.X = lmUVs[edge].X;
+                if (lmUVs[edge].Y < fmins.Y) fmins.Y = lmUVs[edge].Y;
+                if (lmUVs[edge].Y > fmaxs.Y) fmaxs.Y = lmUVs[edge].Y;
             }
 
             // Compute lightmap size
-            int lightmap_width = (int)(Mathf.Ceil(flooredMaxs.X / 16.0f) - Mathf.Floor(flooredMins.X / 16.0f) + 1);
-            int lightmap_height = (int)(Mathf.Ceil(flooredMaxs.Y / 16.0f) - Mathf.Floor(flooredMins.Y / 16.0f) + 1);
+            Vector2 lightmapSize = (fmaxs / 16.0f).Ceil() - (fmins / 16.0f).Floor() + new Vector2(1, 1);
 
             // Load texture from BSP
-            Image img = Image.Create(lightmap_width, lightmap_height, false, Image.Format.Rgb8);
+            Image img = Image.Create((int)lightmapSize.X, (int)lightmapSize.Y, false, Image.Format.Rgb8);
             fs.Seek(lmOffset + lightmapOffset, SeekOrigin.Begin);
-            for (int y = 0; y < lightmap_height; y++)
+            for (int y = 0; y < lightmapSize.Y; y++)
             {
-                for (int x = 0; x < lightmap_width; x++)
+                for (int x = 0; x < lightmapSize.X; x++)
                 {
                     var color = new Color(reader.ReadByte() / 255.0f, reader.ReadByte() / 255.0f, reader.ReadByte() / 255.0f);
                     img.SetPixel(x, y, color);
                 }
             }
             lightmapTexture = ImageTexture.CreateFromImage(img);
+            lightmapTexture.SetFlags(0);
 
-            // We erased lmUVs, since needed info has been stored in min/maxs
-            // and replace with proper lightmap uv calc
+            // Compute lightmap UV
             for (int edge = 0; edge < surfedgeCount; edge++)
             {
-                lmUVs[edge] = new Vector2(
-                    ((lightmap_width / 2.0f) + (lmUVs[edge].X - ((mins.X + maxs.X) / 2.0f)) / 16.0f) / lightmap_width,
-                    ((lightmap_height / 2.0f) + (lmUVs[edge].Y - ((mins.Y + maxs.X) / 2.0f)) / 16.0f) / lightmap_height
-                );
+                lmUVs[edge] = ((rawUVs[edge] - fmins) / (fmaxs - fmins));
             }
+            /*
+             * godly
+            for (int edge = 0; edge < surfedgeCount; edge++)
+            {
+                lmUVs[edge] = ((rawUVs[edge] - fmins) / (fmaxs - fmins));
+            }*/
+
+            /* Broken, all way
+            Vector2 MidPoly = (fmins + fmaxs) / 2.0f;
+            Vector2 MidTex = lightmapSize / 2.0f;
+            for (int edge = 0; edge < surfedgeCount; edge++)
+            {
+                lmUVs[edge] = (MidTex + (rawUVs[edge] - MidPoly) / 16.0f) / lightmapSize;
+            }*/
         }
     }
 
@@ -176,9 +178,11 @@ public partial class GoldSrcBSP : DataPack
         public TextureInfo(FileStream fs, BinaryReader reader)
         {
             vs = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            vs = new Vector3(-vs.X, vs.Z, vs.Y); //Convert
             sShift = reader.ReadSingle();
 
             vt = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            vt = new Vector3(-vs.X, vs.Z, vs.Y); //Convert
             tShift = reader.ReadSingle();
         
             textureIndex = reader.ReadUInt32();
@@ -334,7 +338,8 @@ public partial class GoldSrcBSP : DataPack
         vertices = new Array<Vector3>();
         fs.Seek(lumps["Vertices"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["Vertices"].offset + lumps["Vertices"].length) {
-            vertices.Add(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            var vertex = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            vertices.Add(new Vector3(-vertex.X, vertex.Z, vertex.Y));
         }
         // Parse Edges
         edges = new Array<Edge>();
@@ -501,8 +506,8 @@ public partial class GoldSrcBSP : DataPack
                         int trivertIndex = GetSummitVertIndex(-1, i, summit);
                         surfaceTool.SetUV(face.faceUVs[trivertIndex]);
                         surfaceTool.SetUV2(face.lmUVs[trivertIndex]);
-                        surfaceTool.SetNormal(ConvertVector(face.planeSide != 0 ? -planes[face.planeIndex].normal : planes[face.planeIndex].normal, false));
-                        surfaceTool.AddVertex(ConvertVector(triFanVertices[trivertIndex], false));
+                        surfaceTool.SetNormal(face.planeSide != 0 ? -planes[face.planeIndex].normal : planes[face.planeIndex].normal);
+                        surfaceTool.AddVertex(triFanVertices[trivertIndex]);
                     }
                 }
             }
