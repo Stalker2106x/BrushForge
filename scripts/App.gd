@@ -9,6 +9,7 @@ var files = [];
 
 var filesTree;
 
+var view3D;
 var importer; #Importer
 var gamePath;
 
@@ -16,6 +17,7 @@ var gamePath;
 func _ready():
     Log.logNode = get_node("Layout/TabContainer/Logs/LogLabel");
     importer = get_node("/root/App/Importer");
+    view3D = get_node("Layout/CenterLayout/Main/3DView");
     #File UI
     get_node("FileDialog").connect("file_selected", Callable(self, "openAsset"));
     get_node("FileDialog").connect("files_selected", Callable(self, "openFiles").bind(false));
@@ -30,7 +32,6 @@ func _ready():
     var depsDialog = get_node("DependencyLoadDialog");
     depsDialog.connect("canceled", Callable(self, "emit_signal").bind("dependencies_loaded"));
     #Level select
-    var view3D = get_node("Layout/CenterLayout/Main/3DView");
     var levelSelect = get_node("Layout/CenterLayout/Main/Top/LevelSelect");
     levelSelect.connect("item_selected", Callable(self, "loadSelectedLevel"));
     # Files
@@ -98,9 +99,10 @@ func openAsset(filePath, parent):
     if !asset:
         Log.error("Failed loading file");
         return;
-    if asset.dependencies.size() > 0:
-        openDependencyDialog(asset.dependencies);
-        await dependencies_loaded;
+    # Skip deps for now
+    # if asset.dependencies.size() > 0:
+    #    openDependencyDialog(asset.dependencies);
+    #    await dependencies_loaded;
     if asset.type == "Model":
         asset.BuildGDModel(files);
     files.push_back(asset);
@@ -115,7 +117,6 @@ func unlinkFile(fileId):
     var filesList = get_node("Layout/CenterLayout/TabContainer/Files/ScrollContainer/FilesList");
     filesList.get_child(fileId).queue_free();
     files[fileId].queue_free();
-    var view3D = get_node("Layout/CenterLayout/Main/3DView");
     var levelMetadata = view3D.getLevelMetadata();
     removeLevelFromSelect(levelMetadata);
     if levelMetadata.fileId == fileId:
@@ -138,12 +139,11 @@ func addLevelsToSelect(fileId, filename, levels):
 func removeLevelFromSelect(levelMetadata):
     var select = get_node("Layout/CenterLayout/Main/Top/LevelSelect");
     select.remove_item(levelMetadata.selectId);
-    var view3D = get_node("Layout/CenterLayout/Main/3DView");
     if view3D.getLevelMetadata().fileId == levelMetadata.fileId:
         view3D.unload(true);
 
 func loadSelectedLevel(selectId):
     var select = get_node("Layout/CenterLayout/Main/Top/LevelSelect");
     var metadata = select.get_item_metadata(selectId);
-    get_node("Layout/CenterLayout/Main/3DView").loadLevel(metadata);
+    view3D.loadLevel(metadata);
     get_node("Layout/CenterLayout/TabContainer/Level Textures").fill(metadata, files)
