@@ -39,7 +39,16 @@ func _process(delta):
         localVelocity += Vector3(0, -ProjectSettings.get_setting("physics/3d/default_gravity"), 0);
     velocity = localVelocity;
     move_and_slide();
-        
+
+# Returns a dict with keys:
+# collider: The colliding object.
+# collider_id: The colliding object's ID.
+# normal: The object's surface normal at the intersection point, or Vector3(0, 0, 0) if the ray starts inside the shape and PhysicsRayQueryParameters3D.hit_from_inside is true.
+# position: The intersection point.
+# face_index: The face index at the intersection point.
+# Note: Returns a valid number only if the intersected shape is a ConcavePolygonShape3D. Otherwise, -1 is returned.
+# rid: The intersecting object's RID.
+# shape: The shape index of the colliding shape.
 func getRaycastHit():
     var space = get_world_3d().direct_space_state
     var query = PhysicsRayQueryParameters3D.create(global_position,

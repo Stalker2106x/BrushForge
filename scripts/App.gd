@@ -99,10 +99,12 @@ func openAsset(filePath, parent):
     if !asset:
         Log.error("Failed loading file");
         return;
-    # Skip deps for now
+    # Skip deps for now, autoload
     # if asset.dependencies.size() > 0:
     #    openDependencyDialog(asset.dependencies);
     #    await dependencies_loaded;
+    for dep in asset.dependencies:
+        await openAsset(gamePath+dep.to_lower(), null);
     if asset.type == "Model":
         asset.BuildGDModel(files);
     files.push_back(asset);
@@ -146,4 +148,3 @@ func loadSelectedLevel(selectId):
     var select = get_node("Layout/CenterLayout/Main/Top/LevelSelect");
     var metadata = select.get_item_metadata(selectId);
     view3D.loadLevel(metadata);
-    get_node("Layout/CenterLayout/TabContainer/Level Textures").fill(metadata, files)

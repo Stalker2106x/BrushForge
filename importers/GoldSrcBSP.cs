@@ -13,6 +13,7 @@ public partial class GoldSrcBSP : DataPack
 
     private Dictionary<string, Lump> lumps;
     private Array<Face> faces;
+    private Byte[] rawLightmap;
     private Array<Model> models;
     private Array<Plane> planes;
     private Array<TextureInfo> textureInfos;
@@ -91,7 +92,7 @@ public partial class GoldSrcBSP : DataPack
             lightmapOffset = reader.ReadUInt32();
         }
 
-        public void Build(FileStream fs, BinaryReader reader, UInt32 lmOffset, Array<Int32> surfedges, Array<Edge> edges, Array<GVector3> vertices, Array<Texture> textures, Array<TextureInfo> textureInfos)
+        public void Build(UInt32 lmOffset, Byte[] rawLightmap, Array<Int32> surfedges, Array<Edge> edges, Array<GVector3> vertices, Array<Texture> textures, Array<TextureInfo> textureInfos)
         {
             // No lightmap
             if (lightmapOffset < 0 || lightmapStyles[0] == byte.MaxValue) return;
@@ -126,29 +127,18 @@ public partial class GoldSrcBSP : DataPack
             // Compute lightmap size
             var fcmaxs = (fmaxs / 16.0f).Ceil();
             var ffmins = (fmins / 16.0f).Floor();
-            Vector2 lightmapSize = (fcmaxs - ffmins) + new Vector2(1, 1);
+            Vector2I lightmapSize = ((Vector2I)fcmaxs - (Vector2I)ffmins) + new Vector2I(1, 1);
 
-            // Load texture from BSP
-            Image img = Image.Create((int)lightmapSize.X, (int)lightmapSize.Y, false, Image.Format.Rgb8);
-            fs.Seek(lmOffset + lightmapOffset, SeekOrigin.Begin);
-            for (int y = 0; y < lightmapSize.Y; y++)
-            {
-                for (int x = 0; x < lightmapSize.X; x++)
-                {
-                    var r = reader.ReadByte() / 255.0f;
-                    var g = reader.ReadByte() / 255.0f;
-                    var b = reader.ReadByte() / 255.0f;
-                    var color = new Color(r, g, b);
-                    img.SetPixel(x, y, color);
-                }
-            }
+            // Load texture from rawLightmap
+            var lightmapData = new Byte[lightmapSize.X * lightmapSize.Y * 3];
+            System.Array.Copy(rawLightmap, lightmapOffset, lightmapData, 0, lightmapSize.X * lightmapSize.Y * 3);
+            Image img = Image.CreateFromData(lightmapSize.X, lightmapSize.Y, false, Image.Format.Rgb8, lightmapData);
             lightmapTexture = ImageTexture.CreateFromImage(img);
 
             // Compute lightmap UV
             for (int edge = 0; edge < surfedgeCount; edge++)
             {
-                lmUVs[edge] = ((lmUVs[edge] - fmins) / (fmaxs - fmins));
-                //lmUVs[edge] = ;
+                lmUVs[edge] = ((rawUVs[edge] - fmins) / (fmaxs - fmins));
             }
             /*
              * godly
@@ -308,6 +298,9 @@ public partial class GoldSrcBSP : DataPack
         while (fs.Position < lumps["Faces"].offset + lumps["Faces"].length) {
             faces.Add(new Face(fs, reader));
         }
+        // Parse Raw Lightmap
+        fs.Seek(lumps["Lighting"].offset, SeekOrigin.Begin);
+        rawLightmap = reader.ReadBytes((int)lumps["Lighting"].length);
         // Parse TextureInfo
         textureInfos = new Array<TextureInfo>();
         fs.Seek(lumps["TextureInfo"].offset, SeekOrigin.Begin);
@@ -360,7 +353,7 @@ public partial class GoldSrcBSP : DataPack
         int itm = 0;
         foreach (Face face in faces)
         {
-            face.Build(fs, reader, lumps["Lighting"].offset, surfedges, edges, vertices, textures, textureInfos);
+            face.Build(lumps["Lighting"].offset, rawLightmap, surfedges, edges, vertices, textures, textureInfos);
             gdTextures[itm.ToString()] = face.lightmapTexture;
             itm++;
         }
@@ -531,11 +524,11 @@ public partial class GoldSrcBSP : DataPack
             }
             modelMesh.Mesh = arrayMesh;
             modelNode.AddChild(modelMesh);
-            /* Generate Collision
+            // Generate Collision
             CollisionShape3D collider = new CollisionShape3D();
             collider.Name = "Collider";
             collider.Shape = arrayMesh.CreateTrimeshShape();
-            modelNode.AddChild(collider);*/
+            modelNode.AddChild(collider);
             mapNode.AddChild(modelNode);
         }
         // Generate sky mesh

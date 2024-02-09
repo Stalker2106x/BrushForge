@@ -2,6 +2,10 @@ extends VBoxContainer
 
 const TextureEntryPrefab = preload("res://prefabs/TextureEntry.tscn");
 
+var textureContainer;
+var identifierLabel;
+var dataLabel;
+
 # Called when the node enters the scene tree for the first time.
 func _ready():
     pass # Replace with function body.

@@ -37,6 +37,8 @@ func fileButtonPressed(idx):
         get_node("/root/App/FileDialog").set_visible(true);
     if idx == 1:
         get_node("/root/App/FolderDialog").set_visible(true);
+    if idx == 1:
+        get_node("/root/App/PreferencesDialog").set_visible(true);
 
 func viewButtonPressed(idx):
     var enabled = !viewDropdown.is_item_checked(idx)
