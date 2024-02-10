@@ -23,7 +23,7 @@ public partial class Metadata : Node
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             steamInstallPath = (Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Valve\\Steam", "InstallPath", null) as string).Replace("\\", "/");
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            steamInstallPath = System.Environment.GetEnvironmentVariable("HOME") + "/Library/Application\\ Support/Steam";
+            steamInstallPath = System.Environment.GetEnvironmentVariable("HOME") + "/Library/Application Support/Steam";
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             steamInstallPath = System.Environment.GetEnvironmentVariable("HOME") + "/.local/share/Steam";
         if (steamInstallPath == null)

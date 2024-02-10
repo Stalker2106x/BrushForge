@@ -87,7 +87,6 @@ func openFiles(filesPath, triggerSignal):
         emit_signal("dependencies_loaded");
 
 func openAsset(filePath, parent):
-    filePath = filePath.replace("\\", "/"); #Windows sucks
     Log.info("Loading %s..." % filePath);
     #Allow some time for the dialog to close
     await get_tree().create_timer(0.75).timeout;

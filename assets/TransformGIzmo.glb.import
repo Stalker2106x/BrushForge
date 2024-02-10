@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://d4g3aeu7mo0v3"
-path="res://.godot/imported/TransformGizmo.glb-1a1c8c38826fed2d9d451defe6f04bb2.scn"
+path="res://.godot/imported/TransformGIzmo.glb-c9a12c5e4dd590d1b1d40168af5dfc9b.scn"
 
 [deps]
 
-source_file="res://assets/TransformGizmo.glb"
-dest_files=["res://.godot/imported/TransformGizmo.glb-1a1c8c38826fed2d9d451defe6f04bb2.scn"]
+source_file="res://assets/TransformGIzmo.glb"
+dest_files=["res://.godot/imported/TransformGIzmo.glb-c9a12c5e4dd590d1b1d40168af5dfc9b.scn"]
 
 [params]
 

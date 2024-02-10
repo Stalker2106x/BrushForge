@@ -1,5 +1,7 @@
 extends Control
 
+const NoTexture = preload("res://assets/Missing.png");
+
 var texturePreview;
 var identifierLabel;
 var dataLabel;
@@ -28,6 +30,7 @@ func inspect():
         if !collider.data:
             return; #Unloaded map
         identifierLabel.set_text(collider.identifier);
+        texturePreview.set_texture(NoTexture);
         var dataText = "";
         for field in collider.data.keys():
             dataText += "%s: %s\n" % [field, collider.data[field]];
@@ -49,17 +52,15 @@ func inspectMesh(collision, collider):
             if (Geometry3D.segment_intersects_triangle(collision.position - collision.normal, collision.position + collision.normal,
                  vertices[0], vertices[1], vertices[2])):
                 # Draw immediate mesh (select overlay)
-                var immesh := ImmediateMesh.new()
-                selectedOverlay.mesh = immesh
-                selectedOverlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-                immesh.surface_begin(Mesh.PRIMITIVE_LINES, ORMMaterial3D.new());
+                var sftool := SurfaceTool.new()
+                sftool.begin(Mesh.PRIMITIVE_TRIANGLES);
                 for vertex in vertices:
-                    immesh.surface_add_vertex(vertex + collision.normal);
-                immesh.surface_end();
+                    sftool.add_vertex(vertex + collision.normal);
+                selectedOverlay.mesh = sftool.commit();
                 # Set UI
                 texturePreview.set_texture(mdt.get_material().albedo_texture);
-                identifierLabel.set_text("?");
-                dataLabel.set_text("...");
+                identifierLabel.set_text("...");
+                dataLabel.set_text("");
                 found = true;
                 break;
         if found:

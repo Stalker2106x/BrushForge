@@ -34,7 +34,16 @@ public partial class Asset : Node
     virtual public void Import(FileStream fs, BinaryReader reader, Node app)
     {
     }
-    
+
+    virtual public Texture2D GetTexture(string name)
+    {
+        return null;
+    }
+
+    virtual public void BuildAllTextures()
+    {
+    }
+
     public string GetFileName()
     {
         return Path.GetFileName(path);

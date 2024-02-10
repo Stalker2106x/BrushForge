@@ -407,9 +407,10 @@ public partial class GoldSrcBSP : DataPack
         {
             for (int fileId = 0; fileId < files.Count; fileId++)
             {
-                if (files[fileId].gdTextures.ContainsKey(skyName + cubemapSuffixes[i]))
+                Texture2D candidate = files[fileId].GetTexture(skyName + cubemapSuffixes[i]);
+                if (candidate != null)
                 {
-                    cubemapTextures[i] = files[fileId].gdTextures[skyName + cubemapSuffixes[i]];
+                    cubemapTextures[i] = candidate;
                     break;
                 }
             }
@@ -454,9 +455,11 @@ public partial class GoldSrcBSP : DataPack
                     {
                         for (int fileId = 0; fileId < files.Count; fileId++)
                         {
-                            if (files[fileId].gdTextures.ContainsKey(texture.textureName))
+
+                            Texture2D candidate = files[fileId].GetTexture(texture.textureName);
+                            if (candidate != null)
                             {
-                                (material as StandardMaterial3D).AlbedoTexture = files[fileId].gdTextures[texture.textureName];
+                                (material as StandardMaterial3D).AlbedoTexture = candidate;
                                 (material as StandardMaterial3D).TextureFilter = BaseMaterial3D.TextureFilterEnum.Linear;
                                 break;
                             }

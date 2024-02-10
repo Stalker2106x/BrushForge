@@ -14,7 +14,7 @@ func _input(event):
     if event is InputEventMouseButton:
         match event.button_index:
             MOUSE_BUTTON_RIGHT:
-                Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED if event.pressed else Input.MOUSE_MODE_VISIBLE)
+                get_node("../../../").setMouseCapture(event.pressed);
     if event.is_action_pressed("Use"):
         var collision = getRaycastHit();
         if collision && collision.collider is Entity:

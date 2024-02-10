@@ -19,6 +19,7 @@ func showContent(fileId):
             label.set_text(level);
             levelsList.add_child(label);
     #Textures
+    files[fileId].BuildAllTextures();
     var texturesList = get_node("Layout/TabContainer/Textures/ScrollContainer/TextureList");
     for child in texturesList.get_children():
         child.queue_free();
