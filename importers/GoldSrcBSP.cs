@@ -1,10 +1,7 @@
 using Godot;
 using Godot.Collections;
 using System;
-using System.Globalization;
 using System.IO;
-using System.Runtime.Intrinsics.X86;
-using static System.Net.WebRequestMethods;
 
 public partial class GoldSrcBSP : DataPack
 {
@@ -59,7 +56,7 @@ public partial class GoldSrcBSP : DataPack
     }
     
     /* The face lump contains the surfaces of the scene. */
-    private partial class Face : GodotObject
+    public partial class Face : GodotObject
     {
         public UInt16 planeIndex;       // index of the plane the face is parallel to
         public UInt16 planeSide;        // set if the normal is parallel to the plane normal
@@ -72,9 +69,9 @@ public partial class GoldSrcBSP : DataPack
         public byte[] lightmapStyles;   // styles (bit flags) for the lightmaps
         public UInt32 lightmapOffset;   // offset of the lightmap (in bytes) in the lightmap lump
 
-        public Vector2[] faceUVs;
-        public Texture2D lightmapTexture; // CREATED: parsed lightmap
-        public Vector2[] lmUVs;            // CREATED
+        public Vector2[] faceUVs;         // CREATED: face UVs  
+        public Texture2D lightmapTexture; // CREATED: parsed lightmap texture
+        public Vector2[] lmUVs;           // CREATED: lightmap UVs
 
         public Face(FileStream fs, BinaryReader reader)
         {
@@ -160,7 +157,7 @@ public partial class GoldSrcBSP : DataPack
     /* The texinfo lump contains informations about how textures are applied to surfaces.
      * The lump itself is an array of binary data structures.
      */
-    private partial class TextureInfo : GodotObject
+    public partial class TextureInfo : GodotObject
     {
         public GVector3 vs;     // UV s coordinate
         public float   sShift; // Texture shift in s direction
@@ -198,7 +195,7 @@ public partial class GoldSrcBSP : DataPack
      * Finally their are direct indexes into the faces array, not taking the redirecting
      * by the marksurfaces. 
      */
-    private partial class Model : GodotObject
+    public partial class Model : GodotObject
     {
         public float[]   mins;      // BBox boundaries min
         public float[]   maxs;      // BBox boundaries max
@@ -225,7 +222,7 @@ public partial class GoldSrcBSP : DataPack
     /* Each of this structures defines a plane in 3-dimensional space by using the
      * Hesse normal form: normal * point - distance = 0
      */
-    private partial class Plane : GodotObject
+    public partial class Plane : GodotObject
     {
         public GVector3 normal;  // plane normal vector
         public float   dist;    // Plane equation is: normal * X = dist
@@ -243,7 +240,7 @@ public partial class GoldSrcBSP : DataPack
      * because it is possible to save textures directly within the BSP file
      * instead of storing them in external WAD files.
      */
-    private partial class Texture : GodotObject
+    public partial class Texture : GodotObject
     {
         public string   textureName; // Texture name (16 Chars max)
         public UInt32   width;        // Texture width
@@ -260,7 +257,7 @@ public partial class GoldSrcBSP : DataPack
     }
     
     /* */
-    private partial class Edge : GodotObject
+    public partial class Edge : GodotObject
     {
         public UInt16[] verticesIndex; // index of the edge vertices in vertices array
         
@@ -274,7 +271,55 @@ public partial class GoldSrcBSP : DataPack
             return surfedge >= 0 ? verticesIndex[0] : verticesIndex[1];
         }
     }
-    
+
+    /* returns textureInfo of given face */
+    public TextureInfo GetFaceTextureInfo(Face face)
+    {
+        return textureInfos[face.texInfoIndex];
+    }
+
+    /* returns vertices of given face in triangles */
+    public Array<Vector3> GetFaceTriangleVertices(Face face)
+    {
+        Array<Vector3> fVertices = new Array<Vector3>();
+        //We build the face trifan
+        Vector3[] triFanVertices = new Vector3[face.surfedgeCount];
+        for (UInt32 edge = 0; edge < face.surfedgeCount; edge++)
+        {
+            int surfedge = surfedges[(int)(face.surfedgeIndex + edge)];
+            triFanVertices[edge] = vertices[(int)edges[Math.Abs(surfedge)].GetVerticeIndex(surfedge)].GetGDVector3();
+        }
+        //We send the surface to sftool
+        for (int i = 0; i < triFanVertices.Length - 2; i++)
+        {
+            for (int summit = 0; summit < 3; summit++)
+            {
+                int trivertIndex = GetSummitVertIndex(-1, i, summit);
+                fVertices.Add(triFanVertices[trivertIndex]);
+            }
+        }
+        return fVertices;
+    }
+
+    /* returns face containing this triangle */
+    public Face GetTriangleFace(Array<Vector3> summits)
+    {
+        foreach (Face face in faces)
+        {
+            int found = 0;
+            for (int edge = 0; edge < face.surfedgeCount; edge++)
+            {
+                int surfedge = surfedges[(int)(face.surfedgeIndex + edge)];
+                Vector3 vertex = vertices[(int)edges[Math.Abs(surfedge)].GetVerticeIndex(surfedge)].GetGDVector3();
+                if (vertex.IsEqualApprox(summits[0]) || vertex.IsEqualApprox(summits[1]) || vertex.IsEqualApprox(summits[2]))
+                    found += 1;
+            }
+            if (found == 3)
+                return face;
+        }
+        return null;
+    }
+
     override public void Import(FileStream fs, BinaryReader reader, Node app)
     {
         base.Import(fs, reader, app);
