@@ -10,11 +10,12 @@ public partial class GoldSrcBSP : DataPack
 
     private Dictionary<string, Lump> lumps;
     private Array<Face> faces;
+    private Byte[] rawLightmap;
     private Array<Model> models;
     private Array<Plane> planes;
     private Array<TextureInfo> textureInfos;
     private Array<Texture> textures;
-    private Array<Vector3> vertices;
+    private Array<GVector3> vertices;
     private Array<Edge> edges;
     private Array<Int32> surfedges;
     private Array<Variant> entities;
@@ -55,24 +56,28 @@ public partial class GoldSrcBSP : DataPack
     }
     
     /* The face lump contains the surfaces of the scene. */
-    private partial class Face : GodotObject
+    public partial class Face : GodotObject
     {
         public UInt16 planeIndex;       // index of the plane the face is parallel to
         public UInt16 planeSide;        // set if the normal is parallel to the plane normal
 
-        public UInt32 surfedgeIndex;    // index of the first edge (in the surface edge array)
+        public Int32 surfedgeIndex;    // index of the first edge (in the surface edge array)
         public UInt16 surfedgeCount;    // number of consecutive edges (in the face edge array)
        
         public UInt16 texInfoIndex;     // index of the texture info structure	
     
         public byte[] lightmapStyles;   // styles (bit flags) for the lightmaps
         public UInt32 lightmapOffset;   // offset of the lightmap (in bytes) in the lightmap lump
-        
+
+        public Vector2[] faceUVs;         // CREATED: face UVs  
+        public Texture2D lightmapTexture; // CREATED: parsed lightmap texture
+        public Vector2[] lmUVs;           // CREATED: lightmap UVs
+
         public Face(FileStream fs, BinaryReader reader)
         {
             planeIndex = reader.ReadUInt16();
             planeSide = reader.ReadUInt16();
-            surfedgeIndex = reader.ReadUInt32();
+            surfedgeIndex = reader.ReadInt32();
             surfedgeCount = reader.ReadUInt16();
             texInfoIndex = reader.ReadUInt16();
             lightmapStyles = new byte[4] {
@@ -83,17 +88,81 @@ public partial class GoldSrcBSP : DataPack
             };
             lightmapOffset = reader.ReadUInt32();
         }
+
+        public void Build(UInt32 lmOffset, Byte[] rawLightmap, Array<Int32> surfedges, Array<Edge> edges, Array<GVector3> vertices, Array<Texture> textures, Array<TextureInfo> textureInfos)
+        {
+            // No lightmap
+            if (lightmapOffset < 0 || lightmapStyles[0] == byte.MaxValue) return;
+
+            Vector2[] rawUVs = new Vector2[surfedgeCount];
+            faceUVs = new Vector2[surfedgeCount];
+            lmUVs = new Vector2[surfedgeCount];
+            Vector2 fmins = new Vector2(int.MaxValue, int.MaxValue);
+            Vector2 fmaxs = new Vector2(int.MinValue, int.MinValue);
+
+            // Generate texture coordinates for face
+            TextureInfo texinfo = textureInfos[texInfoIndex];
+            Texture texture = textures[(int)texinfo.textureIndex];
+            for (int edge = 0; edge < surfedgeCount; edge++)
+            {
+                int surfedge = surfedges[(int)(surfedgeIndex + edge)];
+                Vector3 vertex = vertices[(int)edges[Math.Abs(surfedge)].GetVerticeIndex(surfedge)].GetGDVector3();
+                rawUVs[edge] = new Vector2(
+                    (vertex.Dot(texinfo.vs.GetGDVector3()) + texinfo.sShift),
+                    (vertex.Dot(texinfo.vt.GetGDVector3()) + texinfo.tShift)
+                );
+                // For faces, we need to apply texture scale to uvs.
+                faceUVs[edge] = new Vector2(rawUVs[edge].X / texture.width, rawUVs[edge].Y / texture.height);
+                lmUVs[edge] = rawUVs[edge].Floor();
+                // We then extract min and max out of the floored values
+                if (lmUVs[edge].X < fmins.X) fmins.X = lmUVs[edge].X;
+                if (lmUVs[edge].X > fmaxs.X) fmaxs.X = lmUVs[edge].X;
+                if (lmUVs[edge].Y < fmins.Y) fmins.Y = lmUVs[edge].Y;
+                if (lmUVs[edge].Y > fmaxs.Y) fmaxs.Y = lmUVs[edge].Y;
+            }
+
+            // Compute lightmap size
+            var fcmaxs = (fmaxs / 16.0f).Ceil();
+            var ffmins = (fmins / 16.0f).Floor();
+            Vector2I lightmapSize = ((Vector2I)fcmaxs - (Vector2I)ffmins) + new Vector2I(1, 1);
+
+            // Load texture from rawLightmap
+            var lightmapData = new Byte[lightmapSize.X * lightmapSize.Y * 3];
+            System.Array.Copy(rawLightmap, lightmapOffset, lightmapData, 0, lightmapSize.X * lightmapSize.Y * 3);
+            Image img = Image.CreateFromData(lightmapSize.X, lightmapSize.Y, false, Image.Format.Rgb8, lightmapData);
+            lightmapTexture = ImageTexture.CreateFromImage(img);
+
+            // Compute lightmap UV
+            for (int edge = 0; edge < surfedgeCount; edge++)
+            {
+                lmUVs[edge] = ((rawUVs[edge] - fmins) / (fmaxs - fmins));
+            }
+            /*
+             * godly
+            for (int edge = 0; edge < surfedgeCount; edge++)
+            {
+                lmUVs[edge] = ((rawUVs[edge] - fmins) / (fmaxs - fmins));
+            }*/
+
+            /* Broken, all way
+            Vector2 MidPoly = (fmins + fmaxs) / 2.0f;
+            Vector2 MidTex = lightmapSize / 2.0f;
+            for (int edge = 0; edge < surfedgeCount; edge++)
+            {
+                lmUVs[edge] = (MidTex + (rawUVs[edge] - MidPoly) / 16.0f) / lightmapSize;
+            }*/
+        }
     }
-    
+
     /* The texinfo lump contains informations about how textures are applied to surfaces.
      * The lump itself is an array of binary data structures.
      */
-    private partial class TextureInfo : GodotObject
+    public partial class TextureInfo : GodotObject
     {
-        public Vector3 vs;
+        public GVector3 vs;     // UV s coordinate
         public float   sShift; // Texture shift in s direction
 
-        public Vector3 vt;
+        public GVector3 vt;     // UV t coordinate
         public float   tShift; // Texture shift in t direction
        
         public UInt32  textureIndex; // Index of corresponding texture in texture lump
@@ -101,10 +170,10 @@ public partial class GoldSrcBSP : DataPack
         
         public TextureInfo(FileStream fs, BinaryReader reader)
         {
-            vs = ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()), false);
+            vs = new GVector3(reader);
             sShift = reader.ReadSingle();
 
-            vt = ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()), false);
+            vt = new GVector3(reader);
             tShift = reader.ReadSingle();
         
             textureIndex = reader.ReadUInt32();
@@ -126,12 +195,12 @@ public partial class GoldSrcBSP : DataPack
      * Finally their are direct indexes into the faces array, not taking the redirecting
      * by the marksurfaces. 
      */
-    private partial class Model : GodotObject
+    public partial class Model : GodotObject
     {
         public float[]   mins;      // BBox boundaries min
         public float[]   maxs;      // BBox boundaries max
 
-        public Vector3   origin;    // Coordinates to move the // coordinate system
+        public GVector3   origin;    // Coordinates to move the // coordinate system
         public UInt32[]  headNodes; // Index into nodes array
        
         public UInt32   visLeafs;   // ??
@@ -142,7 +211,7 @@ public partial class GoldSrcBSP : DataPack
         {
             mins = new float[3] { reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle() };
             maxs = new float[3] { reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle() };
-            origin = ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            origin = new GVector3(reader);
             headNodes = new UInt32[4] { reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32() };
             visLeafs = reader.ReadUInt32();
             faceIndex = reader.ReadUInt32();
@@ -153,15 +222,15 @@ public partial class GoldSrcBSP : DataPack
     /* Each of this structures defines a plane in 3-dimensional space by using the
      * Hesse normal form: normal * point - distance = 0
      */
-    private partial class Plane : GodotObject
+    public partial class Plane : GodotObject
     {
-        public Vector3 normal;  // plane normal vector
+        public GVector3 normal;  // plane normal vector
         public float   dist;    // Plane equation is: normal * X = dist
         public UInt32  type;    // Plane type, see #defines
         
         public Plane(FileStream fs, BinaryReader reader)
         {
-            normal = ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+            normal = new GVector3(reader);
             dist = reader.ReadSingle();
             type = reader.ReadUInt32();
         }
@@ -171,7 +240,7 @@ public partial class GoldSrcBSP : DataPack
      * because it is possible to save textures directly within the BSP file
      * instead of storing them in external WAD files.
      */
-    private partial class Texture : GodotObject
+    public partial class Texture : GodotObject
     {
         public string   textureName; // Texture name (16 Chars max)
         public UInt32   width;        // Texture width
@@ -188,7 +257,7 @@ public partial class GoldSrcBSP : DataPack
     }
     
     /* */
-    private partial class Edge : GodotObject
+    public partial class Edge : GodotObject
     {
         public UInt16[] verticesIndex; // index of the edge vertices in vertices array
         
@@ -196,11 +265,64 @@ public partial class GoldSrcBSP : DataPack
         {
             verticesIndex = new UInt16[2] { reader.ReadUInt16(), reader.ReadUInt16() };
         }
+
+        public UInt16 GetVerticeIndex(Int32 surfedge)
+        {
+            return surfedge >= 0 ? verticesIndex[0] : verticesIndex[1];
+        }
     }
-    
-    override public void Import(FileStream fs, BinaryReader reader)
+
+    /* returns textureInfo of given face */
+    public TextureInfo GetFaceTextureInfo(Face face)
     {
-        base.Import(fs, reader);
+        return textureInfos[face.texInfoIndex];
+    }
+
+    /* returns vertices of given face in triangles */
+    public Array<Vector3> GetFaceTriangleVertices(Face face)
+    {
+        Array<Vector3> fVertices = new Array<Vector3>();
+        //We build the face trifan
+        Vector3[] triFanVertices = new Vector3[face.surfedgeCount];
+        for (UInt32 edge = 0; edge < face.surfedgeCount; edge++)
+        {
+            int surfedge = surfedges[(int)(face.surfedgeIndex + edge)];
+            triFanVertices[edge] = vertices[(int)edges[Math.Abs(surfedge)].GetVerticeIndex(surfedge)].GetGDVector3();
+        }
+        //We send the surface to sftool
+        for (int i = 0; i < triFanVertices.Length - 2; i++)
+        {
+            for (int summit = 0; summit < 3; summit++)
+            {
+                int trivertIndex = GetSummitVertIndex(-1, i, summit);
+                fVertices.Add(triFanVertices[trivertIndex]);
+            }
+        }
+        return fVertices;
+    }
+
+    /* returns face containing this triangle */
+    public Face GetTriangleFace(Array<Vector3> summits)
+    {
+        foreach (Face face in faces)
+        {
+            int found = 0;
+            for (int edge = 0; edge < face.surfedgeCount; edge++)
+            {
+                int surfedge = surfedges[(int)(face.surfedgeIndex + edge)];
+                Vector3 vertex = vertices[(int)edges[Math.Abs(surfedge)].GetVerticeIndex(surfedge)].GetGDVector3();
+                if (vertex.IsEqualApprox(summits[0]) || vertex.IsEqualApprox(summits[1]) || vertex.IsEqualApprox(summits[2]))
+                    found += 1;
+            }
+            if (found == 3)
+                return face;
+        }
+        return null;
+    }
+
+    override public void Import(FileStream fs, BinaryReader reader, Node app)
+    {
+        base.Import(fs, reader, app);
         // Here we should be just after the header
         lumps = new Dictionary<string, Lump>();
         for (int i = 0; i < Lump.Def.Length; i++) {
@@ -221,6 +343,9 @@ public partial class GoldSrcBSP : DataPack
         while (fs.Position < lumps["Faces"].offset + lumps["Faces"].length) {
             faces.Add(new Face(fs, reader));
         }
+        // Parse Raw Lightmap
+        fs.Seek(lumps["Lighting"].offset, SeekOrigin.Begin);
+        rawLightmap = reader.ReadBytes((int)lumps["Lighting"].length);
         // Parse TextureInfo
         textureInfos = new Array<TextureInfo>();
         fs.Seek(lumps["TextureInfo"].offset, SeekOrigin.Begin);
@@ -252,10 +377,10 @@ public partial class GoldSrcBSP : DataPack
             textures.Add(new Texture(fs, reader));
         }
         // Parse vertices
-        vertices = new Array<Vector3>();
+        vertices = new Array<GVector3>();
         fs.Seek(lumps["Vertices"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["Vertices"].offset + lumps["Vertices"].length) {
-            vertices.Add(ConvertVector(new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle())));
+            vertices.Add(new GVector3(reader));
         }
         // Parse Edges
         edges = new Array<Edge>();
@@ -268,6 +393,39 @@ public partial class GoldSrcBSP : DataPack
         fs.Seek(lumps["Surfedges"].offset, SeekOrigin.Begin);
         while (fs.Position < lumps["Surfedges"].offset + lumps["Surfedges"].length) {
             surfedges.Add(reader.ReadInt32());
+        }
+        // Build Face UVs & lightmap
+        int itm = 0;
+        foreach (Face face in faces)
+        {
+            face.Build(lumps["Lighting"].offset, rawLightmap, surfedges, edges, vertices, textures, textureInfos);
+            gdTextures[itm.ToString()] = face.lightmapTexture;
+            itm++;
+        }
+        // Compute dependencies
+        Array<Asset> files = (Array<Asset>)app.Get("files");
+        foreach (Dictionary<string, string> entity in entities)
+        {
+            if (entity.ContainsKey("CLASSNAME") && entity["CLASSNAME"] == "WORLDSPAWN")
+            {
+                string[] wads = entity["WAD"].Replace("QUIVER/", "").Split(';');
+                foreach (string wad in wads)
+                {
+                    bool found = false;
+                    for (int fileId = 0; fileId < files.Count; fileId++)
+                    {
+                        if (files[fileId].path.Contains(wad))
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                    {
+                        dependencies.Add(wad);
+                    }
+                }
+            }
         }
     }
     
@@ -294,15 +452,21 @@ public partial class GoldSrcBSP : DataPack
         {
             for (int fileId = 0; fileId < files.Count; fileId++)
             {
-                if (files[fileId].gdTextures.ContainsKey(skyName + cubemapSuffixes[i]))
+                Texture2D candidate = files[fileId].GetTexture(skyName + cubemapSuffixes[i]);
+                if (candidate != null)
                 {
-                    cubemapTextures[i] = files[fileId].gdTextures[skyName + cubemapSuffixes[i]];
+                    cubemapTextures[i] = candidate;
                     break;
                 }
             }
             if (cubemapTextures[i] == null) cubemapTextures[i] = GD.Load<Texture2D>("res://assets/NotFound.png");
         }
         return cubemapTextures;
+    }
+
+    static private Vector2 ScaleResolution(Vector2 res)
+    {
+        return new Vector2(1.0f / (UNIT_SCALE * res.X), 1.0f / (UNIT_SCALE * res.Y));
     }
 
     override public Node3D BuildGDLevel(string levelId, string shading, Array<Asset> files)
@@ -326,64 +490,70 @@ public partial class GoldSrcBSP : DataPack
                     faceTextureName = texture.textureName;
                 }
                 // Create one surfaceTool per texture
-                SurfaceTool surfaceTool = null;
+                SurfaceTool surfaceTool;
                 if (surfaceTools.ContainsKey(faceTextureName)) {
                     surfaceTool = surfaceTools[faceTextureName];
                 } else {
                     // Create faces materials
-                    Material material = null;
-                    if (shading == "texturized") {
-                        material = new StandardMaterial3D();
-                        (material as StandardMaterial3D).TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest;
-                        for (int fileId = 0; fileId < files.Count; fileId++) {
-                            if (files[fileId].gdTextures.ContainsKey(texture.textureName)) {
-                                (material as StandardMaterial3D).AlbedoTexture = files[fileId].gdTextures[texture.textureName];
+                    Material material = new StandardMaterial3D();
+                    if (shading == "texturized")
+                    {
+                        for (int fileId = 0; fileId < files.Count; fileId++)
+                        {
+
+                            Texture2D candidate = files[fileId].GetTexture(texture.textureName);
+                            if (candidate != null)
+                            {
+                                (material as StandardMaterial3D).AlbedoTexture = candidate;
+                                (material as StandardMaterial3D).TextureFilter = BaseMaterial3D.TextureFilterEnum.Linear;
                                 break;
                             }
                         }
                         if ((material as StandardMaterial3D).AlbedoTexture == null)
                         {
-                            material = NotFoundMaterial;
-                        } else {
+                            (material as StandardMaterial3D).AlbedoTexture = (NotFoundMaterial as StandardMaterial3D).AlbedoTexture;
+                        }
+                        else
+                        {
                             if ((material as StandardMaterial3D).AlbedoTexture.HasAlpha())
                                 (material as StandardMaterial3D).Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
-                            if (texture.textureName.Contains("~"))
+                            /*if (texture.textureName.Contains("~"))
                             {
                                 (material as StandardMaterial3D).EmissionEnabled = true;
                                 (material as StandardMaterial3D).Emission = new Color(1, 1, 1);
                                 (material as StandardMaterial3D).EmissionEnergyMultiplier = 1.0f;
-                            }
+                            }*/
                         }
-                    } else if (shading == "shaded") {
-                        material = new StandardMaterial3D();
-                        (material as StandardMaterial3D).AlbedoColor = new Color((float)GD.RandRange(0.0f, 1.0f), (float)GD.RandRange(0.0f, 1.0f), (float)GD.RandRange(0.0f, 1.0f));
-                    } else if (shading == "wireframe") {
-                        material = GD.Load<ShaderMaterial>("res://materials/WireframeMaterial.tres");
                     }
+                    (material as StandardMaterial3D).DetailEnabled = true;
+                    (material as StandardMaterial3D).DetailBlendMode = BaseMaterial3D.BlendModeEnum.Mul;
+                    (material as StandardMaterial3D).DetailAlbedo = face.lightmapTexture;
+                    (material as StandardMaterial3D).DetailUVLayer = BaseMaterial3D.DetailUV.UV2;
                     surfaceTool = new SurfaceTool();
                     surfaceTool.Begin(Mesh.PrimitiveType.Triangles);
                     surfaceTool.SetMaterial(material.Duplicate() as Material);
                     surfaceTools[faceTextureName] = surfaceTool;
                 }
                 // Compute faces
-                Vector3 faceNormal = face.planeSide != 0 ? -planes[face.planeIndex].normal : planes[face.planeIndex].normal;
-                float texScaleX = (1.0f / (UNIT_SCALE * texture.width));
-                float texScaleY = (1.0f / (UNIT_SCALE * texture.height));
-                Vector3[] faceVertices = new Vector3[face.surfedgeCount];
-                Vector2[] faceUVs = new Vector2[face.surfedgeCount];
-                Vector3[] faceNormals = new Vector3[face.surfedgeCount];
-                for (UInt32 seIdx = 0; seIdx < face.surfedgeCount; seIdx++) {
-                    int surfedge = surfedges[(int)(face.surfedgeIndex + seIdx)];
-                    Edge edge = edges[Math.Abs(surfedge)];
-                    Vector3 vertex = surfedge >= 0 ? vertices[(int)edge.verticesIndex[0]] : vertices[(int)edge.verticesIndex[1]];
-                    faceVertices[seIdx] = vertex;
-                    faceUVs[seIdx] = new Vector2(
-                        vertex.Dot(texinfo.vs) * texScaleX + texinfo.sShift / texture.width,
-                        vertex.Dot(texinfo.vt) * texScaleY + texinfo.tShift / texture.height
-                    );
-                    faceNormals[seIdx] = faceNormal;
+                //We build the face trifan
+                Vector3[] triFanVertices = new Vector3[face.surfedgeCount];
+                for (UInt32 edge = 0; edge < face.surfedgeCount; edge++)
+                {
+                    int surfedge = surfedges[(int)(face.surfedgeIndex + edge)];
+                    triFanVertices[edge] = vertices[(int)edges[Math.Abs(surfedge)].GetVerticeIndex(surfedge)].GetGDVector3();
                 }
-                surfaceTool.AddTriangleFan(faceVertices, faceUVs, new Color[0] {}, new Vector2[0] {}, faceNormals); 
+                //We send the surface to sftool
+                for (int i = 0; i < triFanVertices.Length - 2; i++)
+                {
+                    for (int summit = 0; summit < 3; summit++)
+                    {
+                        int trivertIndex = GetSummitVertIndex(-1, i, summit);
+                        surfaceTool.SetUV(face.faceUVs[trivertIndex]);
+                        surfaceTool.SetUV2(face.lmUVs[trivertIndex]);
+                        surfaceTool.SetNormal(face.planeSide != 0 ? -planes[face.planeIndex].normal.GetGDVector3() : planes[face.planeIndex].normal.GetGDVector3());
+                        surfaceTool.AddVertex(triFanVertices[trivertIndex]);
+                    }
+                }
             }
             StaticBody3D modelNode = new StaticBody3D();
             modelNode.Name = "Model" + modelIdx.ToString();
@@ -420,7 +590,7 @@ public partial class GoldSrcBSP : DataPack
         return mapNode;
     }
 
-    public void ParseEntities(Node3D mapNode, Array<Asset> files)
+    async public void ParseEntities(Node3D mapNode, Array<Asset> files)
     {
         Dictionary<string, Variant> targets = new Dictionary<string, Variant>();
         Node3D pointEntitiesNode = new Node3D();
@@ -534,7 +704,7 @@ public partial class GoldSrcBSP : DataPack
                         targetStack.Add(targetName);
                         Dictionary<string, string> targetEntity = (Dictionary<string, string>)targets[targetName];
                         string[] vecs = targetEntity["ORIGIN"].Split(" ");
-                        Vector3 targetOrigin = ConvertVector(new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])));
+                        Vector3 targetOrigin = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
                         trainPath.Curve.AddPoint(targetOrigin);
                         targetName = targetEntity.ContainsKey("TARGET") ? targetEntity["TARGET"] : null;
                     } while (!targetStack.Contains(targetName));
@@ -579,12 +749,12 @@ public partial class GoldSrcBSP : DataPack
                     if (entity["CLASSNAME"] == "FUNC_DOOR")
                     {
                         entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
-                        entityNode.Call("configureDoor", entity);
+                        //entityNode.Call("configureDoor", entity);
                     }
                     else if (entity["CLASSNAME"] == "FUNC_BUTTON")
                     {
                         entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
-                        entityNode.Call("configureButton", entity);
+                        //entityNode.Call("configureButton", entity);
                     }
                     else
                     {
@@ -601,14 +771,14 @@ public partial class GoldSrcBSP : DataPack
                 {
                     entityNode = GD.Load<PackedScene>("res://prefabs/Entity.tscn").Instantiate() as Node3D;
                     entityNode.Name = (string)entity["CLASSNAME"];
-                    entityNode.Call("configure", "point", (string)entity["CLASSNAME"], entity, "");
+                    //entityNode.Call("configure", "point", (string)entity["CLASSNAME"], entity, "");
                     if (child != null)
                     {
                         entityNode.AddChild(child);
                     }
                 }
                 string[] vecs = entity["ORIGIN"].Split(" ");
-                entityNode.Position = ConvertVector(new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])));
+                entityNode.Position = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
             }
             // Add gizmo to world
             if (entityNode != null)

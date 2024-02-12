@@ -50,4 +50,36 @@ public partial class DataPack : Asset
         }
         return str;
     }
+
+    // We have to populate surfacetool per triangle (3 vertex for each),
+    // (1)  In triangle strips (/\/\/\), we iterate on current summit + the next two verts, because they are also part of the triangle.
+    // (-1) In triangle fans (_\|/_), we iterate on first summit + the next two verts, because all triangles have the first summit of
+    //      the whole array in common.
+    // In both cases, we end with an offset of 2 to compensate.
+    // We store the index of current summit in triangle fan vertex array in the "trivertIndex" variable
+    static public int GetSummitVertIndex(int trianglePackType, int packIndex, int summit)
+    {
+        int vertIndex = -1;
+        if (trianglePackType == 1)
+        {
+            switch (summit)
+            {
+                case 0:
+                    vertIndex = packIndex + 0;
+                    break;
+                case 1:
+                    vertIndex = packIndex % 2 == 1 ? packIndex + 2 : packIndex + 1;
+                    break;
+                case 2:
+                    vertIndex = packIndex % 2 == 1 ? packIndex + 1 : packIndex + 2;
+                    break;
+            }
+        }
+        else
+        {
+            vertIndex = (summit == 0 ? 0 : packIndex + summit);
+        }
+        return vertIndex;
+    }
+
 }

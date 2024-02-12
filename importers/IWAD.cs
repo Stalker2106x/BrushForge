@@ -92,7 +92,7 @@ public partial class IWAD : DataPack
         }
     }
     
-    override public void Import(FileStream fs, BinaryReader reader)
+    override public void Import(FileStream fs, BinaryReader reader, Node app)
     {
         UInt32 dirCount = reader.ReadUInt32();
         UInt32 dirIndex = reader.ReadUInt32();

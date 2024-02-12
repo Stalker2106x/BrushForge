@@ -6,6 +6,7 @@ var settings;
 var shading;
 var camera;
 var worldContainer;
+var crosshair;
 
 var currentLevelMetadata;
 var currentLevelFile;
@@ -32,6 +33,7 @@ func _ready():
     };
     get_node("../Top/TitleBar/").setButtonStates(settings);
     # Nodes
+    crosshair = get_node("Crosshair");
     worldContainer = get_node("Viewport/World/Container");
     camera = get_node("Viewport/World/Camera");
     get_node("Viewport").connect("gui_input", Callable(self, "viewInput"));
@@ -57,8 +59,10 @@ func viewInput(event):
 func setMouseCapture(enabled):
     if enabled:
         Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED);
+        crosshair.visible = true;
     else:
         Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE);
+        crosshair.visible = false;
 
 func setSetting(section, key, value):
     if settings[section][key] == value:

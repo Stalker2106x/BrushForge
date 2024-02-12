@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.IO;
+using System.Threading;
 
 public partial class WAD3 : DataPack
 {
@@ -69,7 +70,7 @@ public partial class WAD3 : DataPack
         }
     }
 
-    override public void Import(FileStream fs, BinaryReader reader)
+    override public void Import(FileStream fs, BinaryReader reader, Node app)
     {
         UInt32 dirSize = reader.ReadUInt32();
         UInt32 dirIndex = reader.ReadUInt32();
@@ -86,12 +87,46 @@ public partial class WAD3 : DataPack
             if (entry.type != 67) continue;
             Texture tex = new Texture(fs, reader, entry.dataIndex);
             textures.Add(tex);
-            // Insert in GDTextures
-            Image img = Image.Create((int)tex.width, (int)tex.height, false, tex._hasAlpha ? Image.Format.Rgba8 : Image.Format.Rgb8);
-            for (int i = 0; i < tex.dataMipMap0.Length; i++) {
-                img.SetPixel((int)(i % tex.width), (int)(i / tex.width), tex.colorPalette[tex.dataMipMap0[i]]);
-            }
-            gdTextures[tex.name] = ImageTexture.CreateFromImage(img);
         }
+    }
+
+    public override void BuildAllTextures()
+    {
+        foreach (Texture tex in textures)
+        {
+            if (!gdTextures.ContainsKey(tex.name))
+            {
+                gdTextures[tex.name] = CreateTexture(tex);
+            }
+        }
+    }
+
+    public override Texture2D GetTexture(string name)
+    {
+        if (gdTextures.ContainsKey(name))
+        {
+            return gdTextures[name];
+        }
+        // Parse texture array to find texture
+        foreach (Texture tex in textures)
+        {
+            if (tex.name == name)
+            {
+                ImageTexture imgTex = CreateTexture(tex);
+                gdTextures[tex.name] = imgTex;
+                return imgTex;
+            }
+        }
+        return null;
+    }
+
+    public ImageTexture CreateTexture(Texture tex)
+    {
+        Image img = Image.Create((int)tex.width, (int)tex.height, false, tex._hasAlpha ? Image.Format.Rgba8 : Image.Format.Rgb8);
+        for (int i = 0; i < tex.dataMipMap0.Length; i++)
+        {
+            img.SetPixel((int)(i % tex.width), (int)(i / tex.width), tex.colorPalette[tex.dataMipMap0[i]]);
+        }
+        return ImageTexture.CreateFromImage(img);
     }
 }

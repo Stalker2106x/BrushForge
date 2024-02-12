@@ -1,6 +1,8 @@
 using Godot;
+using Microsoft.Win32;
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 
 public partial class Metadata : Node
 {
@@ -15,6 +17,21 @@ public partial class Metadata : Node
     static string[] TextureNativeExtensions = new string[] { ".bmp", ".tga" };
     static string[] SoundExtensions = new string[] { ".wav" };
 
+    public string LocateInstall()
+    {
+        string steamInstallPath = null;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            steamInstallPath = (Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Valve\\Steam", "InstallPath", null) as string).Replace("\\", "/");
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            steamInstallPath = System.Environment.GetEnvironmentVariable("HOME") + "/Library/Application Support/Steam";
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            steamInstallPath = System.Environment.GetEnvironmentVariable("HOME") + "/.local/share/Steam";
+        if (steamInstallPath == null)
+        {
+            return null;
+        }
+        return steamInstallPath + "/steamapps/common/Half-Life";
+    }
     public void Discover(string filePath)
     {
         path = filePath;
@@ -63,7 +80,7 @@ public partial class Metadata : Node
         asset.version = version;
     }
     
-    public Asset ImportAsset()
+    public Asset ImportAsset(Node app)
     {
         if (magic == null) return null;
         Asset asset = null;
@@ -93,7 +110,7 @@ public partial class Metadata : Node
                     case 30:
                         asset = new GoldSrcBSP();
                         SetMetadata(asset);
-                        asset.Import(fs, reader);
+                        asset.Import(fs, reader, app);
                         asset.type = "Pack";
                         asset.format = "GoldSrc BSP";
                         break;
@@ -104,14 +121,14 @@ public partial class Metadata : Node
             case "IWAD":
                 asset = new IWAD();
                 SetMetadata(asset);
-                asset.Import(fs, reader);
+                asset.Import(fs, reader, app);
                 asset.type = "Pack";
                 asset.format = "IWAD";
                 break;
             case "WAD3":
                 asset = new WAD3();
                 SetMetadata(asset);
-                asset.Import(fs, reader);
+                asset.Import(fs, reader, app);
                 asset.type = "Pack";
                 asset.format = "WAD3";
                 break;
@@ -121,7 +138,7 @@ public partial class Metadata : Node
                     case 10:
                         asset = new MDL();
                         SetMetadata(asset);
-                        asset.Import(fs, reader);
+                        asset.Import(fs, reader, app);
                         asset.type = "Model";
                         asset.format = "GoldSrc MDL";
                         break;
@@ -133,7 +150,7 @@ public partial class Metadata : Node
                     case 2:
                         asset = new IDSP();
                         SetMetadata(asset);
-                        asset.Import(fs, reader);
+                        asset.Import(fs, reader, app);
                         asset.type = "Texture";
                         asset.format = "GoldSrc SPR";
                         break;
