@@ -90,6 +90,8 @@ func applySettings():
         skyMat.set_shader_parameter("right", blackPixel);
         skyMat.set_shader_parameter("top", blackPixel);
         skyMat.set_shader_parameter("bottom", blackPixel);
+    return;
+    #Entities
     for entity in get_node("Viewport/World/Container/Map/PointEntities").get_children():
         for child in entity.get_children():
             if child is OmniLight3D:

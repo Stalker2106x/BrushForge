@@ -1,127 +1,62 @@
 using Godot;
 using Godot.Collections;
 using System;
-using System.Globalization;
 using System.IO;
-using System.Runtime.Intrinsics.X86;
-using static System.Net.WebRequestMethods;
+using Sledge.Formats.Bsp;
+using Sledge.Formats.Bsp.Objects;
+using Sledge.Formats.Bsp.Lumps;
+using Sledge.Formats.Id;
+using BrushForge;
 
 public partial class GoldSrcBSP : DataPack
 {
     private string skyName;
     private Vector3 startOrigin;
 
-    private Dictionary<string, Lump> lumps;
-    private Array<Face> faces;
-    private Byte[] rawLightmap;
-    private Array<Model> models;
-    private Array<Plane> planes;
-    private Array<TextureInfo> textureInfos;
-    private Array<Texture> textures;
-    private Array<GVector3> vertices;
-    private Array<Edge> edges;
-    private Array<Int32> surfedges;
-    private Array<Variant> entities;
-
-    /* The file starts with an array of entries for the so-called lumps.
-     * A lump is more or less a section of the file containing a specific
-     * type of data. The lump entries in the file header address these lumps,
-     * accessed by the 15 predefined indexes.
-     */
-    private partial class Lump : GodotObject
-    {
-        public static readonly string[] Def = {
-            "Entities",           // MAP entity text buffer	
-            "Planes",             // Plane array	
-            "Textures",           // Plane array	
-            "Vertices",           // Vertex array	
-            "Visibility",         // Compressed PVS data and directory for all clusters	
-            "Nodes",              // Internal node array for the BSP tree	
-            "TextureInfo",        // Face texture application array	
-            "Faces",              // Face array	
-            "Lighting",           // Lighting	
-            "ClipNodes",          // Internal leaf array of the BSP tree	
-            "Leaves",             // Index lookup table for referencing the face array from a leaf	
-            "MarkSurfaces",       // ?	
-            "Edges",              // Edge array	
-            "Surfedges",          // Index lookup table for referencing the edge array from a face	
-            "Models",             // Models mini bsp tree
-        };
-
-        public UInt32 offset; // offset (in bytes) of the data from the beginning of the file
-        public UInt32 length; // length (in bytes) of the lump data
-
-        public Lump(FileStream fs, BinaryReader reader)
-        {
-            offset = reader.ReadUInt32();
-            length = reader.ReadUInt32();
-        }
-    }
+    private ComputedFace[] faces;
+    private BspFile bsp;
     
-    /* The face lump contains the surfaces of the scene. */
-    private partial class Face : GodotObject
+    public partial class ComputedFace
     {
-        public UInt16 planeIndex;       // index of the plane the face is parallel to
-        public UInt16 planeSide;        // set if the normal is parallel to the plane normal
-
-        public Int32 surfedgeIndex;    // index of the first edge (in the surface edge array)
-        public UInt16 surfedgeCount;    // number of consecutive edges (in the face edge array)
-       
-        public UInt16 texInfoIndex;     // index of the texture info structure	
-    
-        public byte[] lightmapStyles;   // styles (bit flags) for the lightmaps
-        public UInt32 lightmapOffset;   // offset of the lightmap (in bytes) in the lightmap lump
+        public Face bspFace;
 
         public Vector2[] faceUVs;
-        public Texture2D lightmapTexture; // CREATED: parsed lightmap
-        public Vector2[] lmUVs;            // CREATED
+        public Vector2[] lightmapUVs;
 
-        public Face(FileStream fs, BinaryReader reader)
-        {
-            planeIndex = reader.ReadUInt16();
-            planeSide = reader.ReadUInt16();
-            surfedgeIndex = reader.ReadInt32();
-            surfedgeCount = reader.ReadUInt16();
-            texInfoIndex = reader.ReadUInt16();
-            lightmapStyles = new byte[4] {
-                reader.ReadByte(),
-                reader.ReadByte(),
-                reader.ReadByte(),
-                reader.ReadByte()
-            };
-            lightmapOffset = reader.ReadUInt32();
-        }
+        public Texture2D lightmapTexture;
 
-        public void Build(UInt32 lmOffset, Byte[] rawLightmap, Array<Int32> surfedges, Array<Edge> edges, Array<GVector3> vertices, Array<Texture> textures, Array<TextureInfo> textureInfos)
+        public ComputedFace(BspFile bsp, int faceId)
         {
+            bspFace = bsp.Faces[faceId];
             // No lightmap
-            if (lightmapOffset < 0 || lightmapStyles[0] == byte.MaxValue) return;
+            if (bspFace.LightmapOffset < 0 || bspFace.Styles[0] == byte.MaxValue) return;
 
-            Vector2[] rawUVs = new Vector2[surfedgeCount];
-            faceUVs = new Vector2[surfedgeCount];
-            lmUVs = new Vector2[surfedgeCount];
+            Vector2[] rawUVs = new Vector2[bspFace.NumEdges];
+            faceUVs = new Vector2[bspFace.NumEdges];
+            lightmapUVs = new Vector2[bspFace.NumEdges];
             Vector2 fmins = new Vector2(int.MaxValue, int.MaxValue);
             Vector2 fmaxs = new Vector2(int.MinValue, int.MinValue);
 
             // Generate texture coordinates for face
-            TextureInfo texinfo = textureInfos[texInfoIndex];
-            Texture texture = textures[(int)texinfo.textureIndex];
-            for (int edge = 0; edge < surfedgeCount; edge++)
+            TextureInfo texinfo = bsp.Texinfo[bspFace.TextureInfo];
+            MipTexture texture = bsp.Textures[texinfo.MipTexture];
+            for (int edgeN = 0; edgeN < bspFace.NumEdges; edgeN++)
             {
-                int surfedge = surfedges[(int)(surfedgeIndex + edge)];
-                Vector3 vertex = vertices[(int)edges[Math.Abs(surfedge)].GetVerticeIndex(surfedge)].GetGDVector3();
-                rawUVs[edge] = new Vector2(
-                    (vertex.Dot(texinfo.vs.GetGDVector3()) + texinfo.sShift),
-                    (vertex.Dot(texinfo.vt.GetGDVector3()) + texinfo.tShift)
+                int surfedge = bsp.Surfedges[bspFace.FirstEdge + edgeN];
+                Edge edge = bsp.Edges[Math.Abs(surfedge)];
+                Vector3 vertex = bsp.Vertices[surfedge >= 0 ? edge.Start : edge.End].ToGodotVector3();
+                rawUVs[edgeN] = new Vector2(
+                    (vertex.Dot(texinfo.S.ToGodotVector3()) + texinfo.S.W),
+                    (vertex.Dot(texinfo.S.ToGodotVector3()) + texinfo.T.W)
                 );
                 // For faces, we need to apply texture scale to uvs.
-                faceUVs[edge] = new Vector2(rawUVs[edge].X / texture.width, rawUVs[edge].Y / texture.height);
-                lmUVs[edge] = rawUVs[edge].Floor();
+                faceUVs[edgeN] = new Vector2(rawUVs[edgeN].X / texture.Width, rawUVs[edgeN].Y / texture.Height);
+                lightmapUVs[edgeN] = rawUVs[edgeN].Floor();
                 // We then extract min and max out of the floored values
-                if (lmUVs[edge].X < fmins.X) fmins.X = lmUVs[edge].X;
-                if (lmUVs[edge].X > fmaxs.X) fmaxs.X = lmUVs[edge].X;
-                if (lmUVs[edge].Y < fmins.Y) fmins.Y = lmUVs[edge].Y;
-                if (lmUVs[edge].Y > fmaxs.Y) fmaxs.Y = lmUVs[edge].Y;
+                if (lightmapUVs[edgeN].X < fmins.X) fmins.X = lightmapUVs[edgeN].X;
+                if (lightmapUVs[edgeN].X > fmaxs.X) fmaxs.X = lightmapUVs[edgeN].X;
+                if (lightmapUVs[edgeN].Y < fmins.Y) fmins.Y = lightmapUVs[edgeN].Y;
+                if (lightmapUVs[edgeN].Y > fmaxs.Y) fmaxs.Y = lightmapUVs[edgeN].Y;
             }
 
             // Compute lightmap size
@@ -130,240 +65,40 @@ public partial class GoldSrcBSP : DataPack
             Vector2I lightmapSize = ((Vector2I)fcmaxs - (Vector2I)ffmins) + new Vector2I(1, 1);
 
             // Load texture from rawLightmap
-            var lightmapData = new Byte[lightmapSize.X * lightmapSize.Y * 3];
-            System.Array.Copy(rawLightmap, lightmapOffset, lightmapData, 0, lightmapSize.X * lightmapSize.Y * 3);
-            Image img = Image.CreateFromData(lightmapSize.X, lightmapSize.Y, false, Image.Format.Rgb8, lightmapData);
-            lightmapTexture = ImageTexture.CreateFromImage(img);
+            //var lightmapData = new Byte[lightmapSize.X * lightmapSize.Y * 3];
+            //System.Array.Copy(rawLightmap, lightmapOffset, lightmapData, 0, lightmapSize.X * lightmapSize.Y * 3);
+            //Image img = Image.CreateFromData(lightmapSize.X, lightmapSize.Y, false, Image.Format.Rgb8, lightmapData);
+            //lightmapTexture = ImageTexture.CreateFromImage(img);
 
             // Compute lightmap UV
-            for (int edge = 0; edge < surfedgeCount; edge++)
+            for (int edge = 0; edge < bspFace.NumEdges; edge++)
             {
-                lmUVs[edge] = ((rawUVs[edge] - fmins) / (fmaxs - fmins));
+                lightmapUVs[edge] = ((rawUVs[edge] - fmins) / (fmaxs - fmins));
             }
-            /*
-             * godly
-            for (int edge = 0; edge < surfedgeCount; edge++)
-            {
-                lmUVs[edge] = ((rawUVs[edge] - fmins) / (fmaxs - fmins));
-            }*/
 
-            /* Broken, all way
-            Vector2 MidPoly = (fmins + fmaxs) / 2.0f;
-            Vector2 MidTex = lightmapSize / 2.0f;
-            for (int edge = 0; edge < surfedgeCount; edge++)
-            {
-                lmUVs[edge] = (MidTex + (rawUVs[edge] - MidPoly) / 16.0f) / lightmapSize;
-            }*/
         }
     }
 
-    /* The texinfo lump contains informations about how textures are applied to surfaces.
-     * The lump itself is an array of binary data structures.
-     */
-    private partial class TextureInfo : GodotObject
+    override public void Import(FileStream fs, BinaryReader reader, Godot.Node app)
     {
-        public GVector3 vs;     // UV s coordinate
-        public float   sShift; // Texture shift in s direction
+        bsp = new BspFile(fs);
 
-        public GVector3 vt;     // UV t coordinate
-        public float   tShift; // Texture shift in t direction
-       
-        public UInt32  textureIndex; // Index of corresponding texture in texture lump
-        public UInt32  flags;
-        
-        public TextureInfo(FileStream fs, BinaryReader reader)
-        {
-            vs = new GVector3(reader);
-            sShift = reader.ReadSingle();
+        //base.Import(fs, reader, app);
 
-            vt = new GVector3(reader);
-            tShift = reader.ReadSingle();
-        
-            textureIndex = reader.ReadUInt32();
-            flags = reader.ReadUInt32();
-        }
-    }
-    
-    /* A model is kind of a mini BSP tree.
-     * Its size is determinded by the bounding box spaned by the first to members
-     * of this struct. The major difference between a model and the BSP tree holding
-     * the scene is that the models use a local coordinate system for their vertexes
-     * and just state its origin in world coordinates. During rendering the coordinate
-     * system is translated to the origin of the model (glTranslate()) and moved back
-     * after the models BSP tree has been traversed. Furthermore their are 4 indexes
-     * into node arrays. The first one has proofed to index the root node of the mini
-     * BSP tree used for rendering. The other three indexes could probably be used for
-     * collision detection, meaning they point into the clipnodes, but I am not sure
-     * about this. The meaning of the next value is also somehow unclear to me.
-     * Finally their are direct indexes into the faces array, not taking the redirecting
-     * by the marksurfaces. 
-     */
-    private partial class Model : GodotObject
-    {
-        public float[]   mins;      // BBox boundaries min
-        public float[]   maxs;      // BBox boundaries max
-
-        public GVector3   origin;    // Coordinates to move the // coordinate system
-        public UInt32[]  headNodes; // Index into nodes array
-       
-        public UInt32   visLeafs;   // ??
-        public UInt32   faceIndex;  // Offset of faces from the beginning of file
-        public UInt32   faceCount;      // Count of faces
-        
-        public Model(FileStream fs, BinaryReader reader)
-        {
-            mins = new float[3] { reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle() };
-            maxs = new float[3] { reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle() };
-            origin = new GVector3(reader);
-            headNodes = new UInt32[4] { reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32() };
-            visLeafs = reader.ReadUInt32();
-            faceIndex = reader.ReadUInt32();
-            faceCount = reader.ReadUInt32();
-        }
-    }
-
-    /* Each of this structures defines a plane in 3-dimensional space by using the
-     * Hesse normal form: normal * point - distance = 0
-     */
-    private partial class Plane : GodotObject
-    {
-        public GVector3 normal;  // plane normal vector
-        public float   dist;    // Plane equation is: normal * X = dist
-        public UInt32  type;    // Plane type, see #defines
-        
-        public Plane(FileStream fs, BinaryReader reader)
-        {
-            normal = new GVector3(reader);
-            dist = reader.ReadSingle();
-            type = reader.ReadUInt32();
-        }
-    }
-
-    /* The texture lump is somehow a bit more complex then the other lumps,
-     * because it is possible to save textures directly within the BSP file
-     * instead of storing them in external WAD files.
-     */
-    private partial class Texture : GodotObject
-    {
-        public string   textureName; // Texture name (16 Chars max)
-        public UInt32   width;        // Texture width
-        public UInt32   height;       // Texture height
-        public UInt32[] offsets;      // Offsets to texture mipmaps BSPMIPTEX; (4 Levels)
-        
-        public Texture(FileStream fs, BinaryReader reader)
-        {
-            textureName = ExtractString(reader.ReadBytes(16));
-            width = reader.ReadUInt32();
-            height = reader.ReadUInt32();
-            offsets = new UInt32[] { reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32() };
-        }
-    }
-    
-    /* */
-    private partial class Edge : GodotObject
-    {
-        public UInt16[] verticesIndex; // index of the edge vertices in vertices array
-        
-        public Edge(FileStream fs, BinaryReader reader)
-        {
-            verticesIndex = new UInt16[2] { reader.ReadUInt16(), reader.ReadUInt16() };
-        }
-
-        public UInt16 GetVerticeIndex(Int32 surfedge)
-        {
-            return surfedge >= 0 ? verticesIndex[0] : verticesIndex[1];
-        }
-    }
-    
-    override public void Import(FileStream fs, BinaryReader reader, Node app)
-    {
-        base.Import(fs, reader, app);
-        // Here we should be just after the header
-        lumps = new Dictionary<string, Lump>();
-        for (int i = 0; i < Lump.Def.Length; i++) {
-            lumps[Lump.Def[i]] = new Lump(fs, reader);
-        }
-        // Parse Entities
-        entities = new Array<Variant>();
-        fs.Seek(lumps["Entities"].offset, SeekOrigin.Begin);
-        string[] rawEntities = ExtractString(reader.ReadBytes((int)lumps["Entities"].length)).Replace("\" \"", "\": \"").Replace("\"\n\"", "\",\"").Replace("\\", "/").Replace("\n", "").Split('}');
-        foreach (string rawEntity in rawEntities)
-        {
-            if (rawEntity == "") continue;
-            entities.Add(Json.ParseString(rawEntity + "}"));
-        }
-        // Parse Faces
-        faces = new Array<Face>();
-        fs.Seek(lumps["Faces"].offset, SeekOrigin.Begin);
-        while (fs.Position < lumps["Faces"].offset + lumps["Faces"].length) {
-            faces.Add(new Face(fs, reader));
-        }
-        // Parse Raw Lightmap
-        fs.Seek(lumps["Lighting"].offset, SeekOrigin.Begin);
-        rawLightmap = reader.ReadBytes((int)lumps["Lighting"].length);
-        // Parse TextureInfo
-        textureInfos = new Array<TextureInfo>();
-        fs.Seek(lumps["TextureInfo"].offset, SeekOrigin.Begin);
-        while (fs.Position < lumps["TextureInfo"].offset + lumps["TextureInfo"].length) {
-            textureInfos.Add(new TextureInfo(fs, reader));
-        }
-        // Parse Models
-        models = new Array<Model>();
-        fs.Seek(lumps["Models"].offset, SeekOrigin.Begin);
-        while (fs.Position < lumps["Models"].offset + lumps["Models"].length) {
-            models.Add(new Model(fs, reader));
-        }
-        // Parse Planes
-        planes = new Array<Plane>();
-        fs.Seek(lumps["Planes"].offset, SeekOrigin.Begin);
-        while (fs.Position < lumps["Planes"].offset + lumps["Planes"].length) {
-            planes.Add(new Plane(fs, reader));
-        }
-        // Parse Textures
-        textures = new Array<Texture>();
-        fs.Seek(lumps["Textures"].offset, SeekOrigin.Begin);
-        UInt32 texturesCount = reader.ReadUInt32();       // Number of BSPMIPTEX structures
-        UInt32[] texturesOffsets = new UInt32[texturesCount]; // Distance in bytes from the beginning of the texture lump to each of the texture structs
-        for (int i = 0; i < texturesCount; i++) {
-            texturesOffsets[i] = reader.ReadUInt32(); 
-        }
-        foreach (UInt32 offset in texturesOffsets) {
-            fs.Seek(lumps["Textures"].offset + offset, SeekOrigin.Begin);
-            textures.Add(new Texture(fs, reader));
-        }
-        // Parse vertices
-        vertices = new Array<GVector3>();
-        fs.Seek(lumps["Vertices"].offset, SeekOrigin.Begin);
-        while (fs.Position < lumps["Vertices"].offset + lumps["Vertices"].length) {
-            vertices.Add(new GVector3(reader));
-        }
-        // Parse Edges
-        edges = new Array<Edge>();
-        fs.Seek(lumps["Edges"].offset, SeekOrigin.Begin);
-        while (fs.Position < lumps["Edges"].offset + lumps["Edges"].length) {
-            edges.Add(new Edge(fs, reader));
-        }
-        // Parse SurfEdges
-        surfedges = new Array<Int32>();
-        fs.Seek(lumps["Surfedges"].offset, SeekOrigin.Begin);
-        while (fs.Position < lumps["Surfedges"].offset + lumps["Surfedges"].length) {
-            surfedges.Add(reader.ReadInt32());
-        }
         // Build Face UVs & lightmap
-        int itm = 0;
-        foreach (Face face in faces)
+        faces = new ComputedFace[bsp.Faces.Count];
+        for (int faceId = 0; faceId < bsp.Faces.Count; faceId++)
         {
-            face.Build(lumps["Lighting"].offset, rawLightmap, surfedges, edges, vertices, textures, textureInfos);
-            gdTextures[itm.ToString()] = face.lightmapTexture;
-            itm++;
+            faces[faceId] = new ComputedFace(bsp, faceId);
+            gdTextures[faceId.ToString()] = faces[faceId].lightmapTexture;
         }
         // Compute dependencies
         Array<Asset> files = (Array<Asset>)app.Get("files");
-        foreach (Dictionary<string, string> entity in entities)
+        foreach (Entity entity in bsp.Entities)
         {
-            if (entity.ContainsKey("CLASSNAME") && entity["CLASSNAME"] == "WORLDSPAWN")
+            if (entity.ClassName == "WORLDSPAWN")
             {
-                string[] wads = entity["WAD"].Replace("QUIVER/", "").Split(';');
+                string[] wads = entity.Get("WAD", "").Replace("QUIVER/", "").Split(';');
                 foreach (string wad in wads)
                 {
                     bool found = false;
@@ -391,12 +126,6 @@ public partial class GoldSrcBSP : DataPack
     public Vector3 GetLevelStart()
     {
         return startOrigin;
-    }
-
-
-    override public Array<Variant> GetEntities()
-    {
-        return entities;
     }
 
     public Texture2D[] GetSkyCubemapTextures(Array<Asset> files)
@@ -430,18 +159,18 @@ public partial class GoldSrcBSP : DataPack
         Node3D mapNode = new Node3D();
         mapNode.Name = "Map";
         ArrayMesh skyMesh = new ArrayMesh();
-        for (int modelIdx = 0; modelIdx < models.Count; modelIdx++) {
+        for (int modelIdx = 0; modelIdx < bsp.Models.Count; modelIdx++) {
             Dictionary<string, SurfaceTool> surfaceTools = new Dictionary<string, SurfaceTool>();
-            UInt32 faceEnd = models[modelIdx].faceIndex + models[modelIdx].faceCount;
-            for (UInt32 faceIdx = models[modelIdx].faceIndex; faceIdx < faceEnd; faceIdx++) {
-                Face face = faces[(int)faceIdx];
-                TextureInfo texinfo = textureInfos[face.texInfoIndex];
-                Texture texture = null;
-                string faceTextureName = Convert.ToString(texinfo.textureIndex);
-                if (texinfo.textureIndex < textures.Count) {
+            int faceEnd = bsp.Models[modelIdx].FirstFace + bsp.Models[modelIdx].NumFaces;
+            for (int faceIdx = bsp.Models[modelIdx].FirstFace; faceIdx < faceEnd; faceIdx++) {
+                ComputedFace face = faces[(int)faceIdx];
+                TextureInfo texinfo = bsp.Texinfo[face.bspFace.TextureInfo];
+                MipTexture texture = null;
+                string faceTextureName = Convert.ToString(texinfo.MipTexture);
+                if (texinfo.MipTexture < bsp.Textures.Count) {
                     // In older versions of BSP, there is no texture
-                    texture = textures[(int)texinfo.textureIndex];
-                    faceTextureName = texture.textureName;
+                    texture = bsp.Textures[(int)texinfo.MipTexture];
+                    faceTextureName = texture.Name;
                 }
                 // Create one surfaceTool per texture
                 SurfaceTool surfaceTool;
@@ -454,9 +183,9 @@ public partial class GoldSrcBSP : DataPack
                     {
                         for (int fileId = 0; fileId < files.Count; fileId++)
                         {
-                            if (files[fileId].gdTextures.ContainsKey(texture.textureName))
+                            if (files[fileId].gdTextures.ContainsKey(texture.Name))
                             {
-                                (material as StandardMaterial3D).AlbedoTexture = files[fileId].gdTextures[texture.textureName];
+                                (material as StandardMaterial3D).AlbedoTexture = files[fileId].gdTextures[texture.Name];
                                 (material as StandardMaterial3D).TextureFilter = BaseMaterial3D.TextureFilterEnum.Linear;
                                 break;
                             }
@@ -488,11 +217,12 @@ public partial class GoldSrcBSP : DataPack
                 }
                 // Compute faces
                 //We build the face trifan
-                Vector3[] triFanVertices = new Vector3[face.surfedgeCount];
-                for (UInt32 edge = 0; edge < face.surfedgeCount; edge++)
+                Vector3[] triFanVertices = new Vector3[face.bspFace.NumEdges];
+                for (int edgeN = 0; edgeN < face.bspFace.NumEdges; edgeN++)
                 {
-                    int surfedge = surfedges[(int)(face.surfedgeIndex + edge)];
-                    triFanVertices[edge] = vertices[(int)edges[Math.Abs(surfedge)].GetVerticeIndex(surfedge)].GetGDVector3();
+                    int surfedge = bsp.Surfedges[face.bspFace.FirstEdge + edgeN];
+                    Edge edge = bsp.Edges[Math.Abs(surfedge)];
+                    triFanVertices[edgeN] = bsp.Vertices[surfedge >= 0 ? edge.Start : edge.End].ToGodotVector3();
                 }
                 //We send the surface to sftool
                 for (int i = 0; i < triFanVertices.Length - 2; i++)
@@ -501,8 +231,8 @@ public partial class GoldSrcBSP : DataPack
                     {
                         int trivertIndex = GetSummitVertIndex(-1, i, summit);
                         surfaceTool.SetUV(face.faceUVs[trivertIndex]);
-                        surfaceTool.SetUV2(face.lmUVs[trivertIndex]);
-                        surfaceTool.SetNormal(face.planeSide != 0 ? -planes[face.planeIndex].normal.GetGDVector3() : planes[face.planeIndex].normal.GetGDVector3());
+                        surfaceTool.SetUV2(face.lightmapUVs[trivertIndex]);
+                        surfaceTool.SetNormal(face.bspFace.Side != 0 ? -bsp.Planes[face.bspFace.Plane].Normal.ToGodotVector3(): bsp.Planes[face.bspFace.Plane].Normal.ToGodotVector3());
                         surfaceTool.AddVertex(triFanVertices[trivertIndex]);
                     }
                 }
@@ -538,10 +268,11 @@ public partial class GoldSrcBSP : DataPack
         MeshInstance3D skyMeshI = new MeshInstance3D();
         skyMeshI.Mesh = skyMesh;
         skyNode.AddChild(skyMeshI);
-        ParseEntities(mapNode, files);
+        //ParseEntities(mapNode, files);
         return mapNode;
     }
 
+    /*
     async public void ParseEntities(Node3D mapNode, Array<Asset> files)
     {
         Dictionary<string, Variant> targets = new Dictionary<string, Variant>();
@@ -555,7 +286,7 @@ public partial class GoldSrcBSP : DataPack
         pathsNode.Name = "Paths";
         mapNode.AddChild(pathsNode);
         // First pass, setup things
-        foreach (Dictionary<string, string> entity in entities)
+        foreach (Dictionary<string, string> entity in bsp.Entities)
         {
             if (entity.ContainsKey("CLASSNAME"))
             {
@@ -738,5 +469,5 @@ public partial class GoldSrcBSP : DataPack
                 pointEntitiesNode.AddChild(entityNode);
             }
         }
-    }
+    }*/
 }

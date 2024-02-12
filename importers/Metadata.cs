@@ -53,7 +53,7 @@ public partial class Metadata : Node
             }
         }
         // Parse complex file
-        fs = File.OpenRead(path);
+        fs = File.Open(path, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read);
         if (fs.Length < 4) return; // Minimum header is 4
         reader = new BinaryReader(fs);
         version = reader.ReadUInt32();
@@ -110,6 +110,7 @@ public partial class Metadata : Node
                     case 30:
                         asset = new GoldSrcBSP();
                         SetMetadata(asset);
+                        fs.Seek(0, SeekOrigin.Begin);
                         asset.Import(fs, reader, app);
                         asset.type = "Pack";
                         asset.format = "GoldSrc BSP";
