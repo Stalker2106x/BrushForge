@@ -97,6 +97,8 @@ public partial class GoldSrcBSP : DataPack
 
     public partial class ComputedFace
     {
+        public const float UNIT_SCALE = 1.0f / 32.0f;
+
         public Face bspFace;
 
         public Vector2[] faceUVs;
@@ -328,7 +330,7 @@ public partial class GoldSrcBSP : DataPack
                 {
                     int surfedge = bsp.Surfedges[face.bspFace.FirstEdge + edgeN];
                     Edge edge = bsp.Edges[Math.Abs(surfedge)];
-                    triFanVertices[edgeN] = bsp.Vertices[surfedge >= 0 ? edge.Start : edge.End].ToGodotVector3();
+                    triFanVertices[edgeN] = bsp.Vertices[surfedge >= 0 ? edge.Start : edge.End].ToSGodotVector3();
                 }
                 //We send the surface to sftool
                 for (int i = 0; i < triFanVertices.Length - 2; i++)
@@ -338,7 +340,7 @@ public partial class GoldSrcBSP : DataPack
                         int trivertIndex = GetSummitVertIndex(-1, i, summit);
                         surfaceTool.SetUV(face.faceUVs[trivertIndex]);
                         surfaceTool.SetUV2(face.lightmapUVs[trivertIndex]);
-                        surfaceTool.SetNormal(bsp.Planes[face.bspFace.Plane].Normal.ToGodotVector3());
+                        surfaceTool.SetNormal(bsp.Planes[face.bspFace.Plane].Normal.ToSGodotVector3());
                         surfaceTool.AddVertex(triFanVertices[trivertIndex]);
                     }
                 }
@@ -378,7 +380,7 @@ public partial class GoldSrcBSP : DataPack
         return mapNode;
     }
 
-    async public void ParseEntities(Node3D mapNode, Array<Asset> files)
+    public void ParseEntities(Node3D mapNode, Array<Asset> files)
     {
         Dictionary<string, GEntity> targets = new Dictionary<string, GEntity>();
         Node3D pointEntitiesNode = new Node3D();
@@ -405,7 +407,7 @@ public partial class GoldSrcBSP : DataPack
             }
         }
         // Second pass, lets do magic
-        foreach (Entity entity in bsp.Entities)
+        foreach (GEntity entity in entities)
         {
             Node3D entityNode = null;
             Node3D child = null;
@@ -469,14 +471,14 @@ public partial class GoldSrcBSP : DataPack
                 {
                     child = GD.Load<PackedScene>("res://prefabs/Beam.tscn").Instantiate() as Node3D;
                     string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
-                    Vector3 origin = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
+                    Vector3 origin = new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).ToSGodotVector3();
                     child.Call("configure", origin, entity.Get<string>("LASERTARGET", null));
                 }
                 // Map entrypoint
                 else if (entity.ClassName == "INFO_PLAYER_START")
                 {
                     string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
-                    startOrigin = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
+                    startOrigin = new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).ToSGodotVector3();
                 }
                 // Paths in 3D
                 else if (entity.ClassName == "FUNC_TRAIN")
@@ -492,7 +494,7 @@ public partial class GoldSrcBSP : DataPack
                         targetStack.Add(targetName);
                         GEntity targetEntity = targets[targetName];
                         string[] vecs = targetEntity.Get<string>("ORIGIN", null).Split(" ");
-                        Vector3 targetOrigin = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
+                        Vector3 targetOrigin = new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).ToSGodotVector3();
                         trainPath.Curve.AddPoint(targetOrigin);
                         targetName = targetEntity.Get<string>("TARGET", null);
                     } while (!targetStack.Contains(targetName));
@@ -559,14 +561,14 @@ public partial class GoldSrcBSP : DataPack
                 {
                     entityNode = GD.Load<PackedScene>("res://prefabs/Entity.tscn").Instantiate() as Node3D;
                     entityNode.Name = entity.ClassName;
-                    //entityNode.Call("configure", "point", (string)entity.Get<string>("CLASSNAME"], , null)ntity, "");
+                    entityNode.Call("configure", "point", (string)entity.ClassName, entity, "");
                     if (child != null)
                     {
                         entityNode.AddChild(child);
                     }
                 }
                 string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
-                entityNode.Position = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
+                entityNode.Position = new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).ToSGodotVector3();
             }
             // Add gizmo to world
             if (entityNode != null)
