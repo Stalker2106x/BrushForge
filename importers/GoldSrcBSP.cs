@@ -33,7 +33,7 @@ public partial class GoldSrcBSP : DataPack
         }
     }
 
-    public class LightmapBuilder
+    public partial class LightmapBuilder : GodotObject
     {
         private const int BytesPerPixel = 3;
 
@@ -161,6 +161,20 @@ public partial class GoldSrcBSP : DataPack
             }
         }
 
+        /* build trifan */
+        public Vector3[] BuildTriFanVertices(BspFile bsp)
+        {
+            Vector3[] triFanVertices = new Vector3[bspFace.NumEdges];
+            triFanVertices = new Vector3[bspFace.NumEdges];
+            for (int edgeN = 0; edgeN < bspFace.NumEdges; edgeN++)
+            {
+                int surfedge = bsp.Surfedges[bspFace.FirstEdge + edgeN];
+                Edge edge = bsp.Edges[Math.Abs(surfedge)];
+                triFanVertices[edgeN] = bsp.Vertices[surfedge >= 0 ? edge.Start : edge.End].ToSGodotVector3();
+            }
+            return triFanVertices;
+        }
+
         public void Final(LightmapBuilder builder)
         {
             var lightmapWidth = builder.Width;
@@ -174,6 +188,25 @@ public partial class GoldSrcBSP : DataPack
                 );
             }
         }
+    }
+
+    public ComputedFace GetFaceFromTriangle(Array<Vector3> summits)
+    {
+        foreach (ComputedFace face in faces)
+        {
+            int found = 0;
+            for (int edgeN = 0; edgeN < face.bspFace.NumEdges; edgeN++)
+            {
+                int surfedge = bsp.Surfedges[face.bspFace.FirstEdge + edgeN];
+                Edge edge = bsp.Edges[Math.Abs(surfedge)];
+                Vector3 vertex = bsp.Vertices[surfedge > 0 ? edge.Start : edge.End].ToGodotVector3();
+                if (vertex.IsEqualApprox(summits[0]) || vertex.IsEqualApprox(summits[1]) || vertex.IsEqualApprox(summits[2]))
+                    found += 1;
+            }
+            if (found == 3)
+                return face;
+        }
+        return null;
     }
 
     override public void Import(FileStream fs, BinaryReader reader, Godot.Node app)
@@ -255,11 +288,6 @@ public partial class GoldSrcBSP : DataPack
         return cubemapTextures;
     }
 
-    static private Vector2 ScaleResolution(Vector2 res)
-    {
-        return new Vector2(1.0f / (UNIT_SCALE * res.X), 1.0f / (UNIT_SCALE * res.Y));
-    }
-
     override public Node3D BuildGDLevel(string levelId, string shading, Array<Asset> files)
     {
         Material NotFoundMaterial = GD.Load<StandardMaterial3D>("res://materials/NotfoundMaterial.tres");
@@ -323,15 +351,8 @@ public partial class GoldSrcBSP : DataPack
                     surfaceTool.SetMaterial(material.Duplicate() as Material);
                     surfaceTools[faceTextureName] = surfaceTool;
                 }
-                // Compute faces
-                //We build the face trifan
-                Vector3[] triFanVertices = new Vector3[face.bspFace.NumEdges];
-                for (int edgeN = 0; edgeN < face.bspFace.NumEdges; edgeN++)
-                {
-                    int surfedge = bsp.Surfedges[face.bspFace.FirstEdge + edgeN];
-                    Edge edge = bsp.Edges[Math.Abs(surfedge)];
-                    triFanVertices[edgeN] = bsp.Vertices[surfedge >= 0 ? edge.Start : edge.End].ToSGodotVector3();
-                }
+                // Compute triangles from face vertices
+                Vector3[] triFanVertices = face.BuildTriFanVertices(bsp);
                 //We send the surface to sftool
                 for (int i = 0; i < triFanVertices.Length - 2; i++)
                 {

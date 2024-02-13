@@ -119,13 +119,6 @@ public partial class Metadata : Node
                         return null; // Looks like a *.nod
                 }
                 break;
-            case "IWAD":
-                asset = new IWAD();
-                SetMetadata(asset);
-                asset.Import(fs, reader, app);
-                asset.type = "Pack";
-                asset.format = "IWAD";
-                break;
             case "WAD3":
                 asset = new WAD3();
                 SetMetadata(asset);

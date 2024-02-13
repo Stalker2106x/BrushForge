@@ -17,7 +17,7 @@ var gamePath;
 func _ready():
     Log.logNode = get_node("Layout/TabContainer/Logs/LogLabel");
     importer = get_node("/root/App/Importer");
-    view3D = get_node("Layout/CenterLayout/Main/3DView");
+    view3D = get_node("/root/App/Layout/CenterLayout/Main/Views/3DView");
     #File UI
     get_node("FileDialog").connect("file_selected", Callable(self, "openAsset"));
     get_node("FileDialog").connect("files_selected", Callable(self, "openFiles").bind(false));

@@ -10,7 +10,7 @@
 [ext_resource type="Texture2D" uid="uid://c3l2jlbt4fvbm" path="res://assets/Wireframe.png" id="7_w2248"]
 [ext_resource type="Texture2D" uid="uid://xiffgpg61xpa" path="res://assets/Shaded.png" id="8_rngdq"]
 [ext_resource type="Texture2D" uid="uid://d3xhssevy46uo" path="res://assets/Texturized.png" id="9_6ln17"]
-[ext_resource type="PackedScene" uid="uid://d4g3aeu7mo0v3" path="res://assets/TransformGIzmo.glb" id="10_p7x03"]
+[ext_resource type="PackedScene" uid="uid://d4g3aeu7mo0v3" path="res://assets/TransformGizmo.glb" id="10_p7x03"]
 [ext_resource type="Texture2D" uid="uid://d3claeraj5wk4" path="res://assets/crosshair.png" id="11_862x4"]
 [ext_resource type="Script" path="res://scripts/Inspector.gd" id="13_ortvp"]
 [ext_resource type="Texture2D" uid="uid://ct6krfvslra0v" path="res://assets/BrushForgeFull.png" id="14_eu4wb"]
@@ -103,114 +103,41 @@ text = "3D View Level:"
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 
-[node name="3DView" type="Control" parent="Layout/CenterLayout/Main"]
+[node name="Views" type="Control" parent="Layout/CenterLayout/Main"]
+clip_contents = true
 layout_mode = 2
 size_flags_vertical = 3
-script = ExtResource("4_r574j")
 
-[node name="Viewport" type="SubViewportContainer" parent="Layout/CenterLayout/Main/3DView"]
+[node name="3DView" type="SubViewportContainer" parent="Layout/CenterLayout/Main/Views"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 1.0
-offset_top = 1.0
-offset_right = 1.0
-offset_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 stretch = true
+script = ExtResource("4_r574j")
 
-[node name="World" type="SubViewport" parent="Layout/CenterLayout/Main/3DView/Viewport"]
+[node name="World" type="SubViewport" parent="Layout/CenterLayout/Main/Views/3DView"]
 handle_input_locally = false
 audio_listener_enable_2d = true
 audio_listener_enable_3d = true
 size = Vector2i(968, 593)
 render_target_update_mode = 4
 
-[node name="Camera" parent="Layout/CenterLayout/Main/3DView/Viewport/World" instance=ExtResource("5_4mito")]
+[node name="Camera" parent="Layout/CenterLayout/Main/Views/3DView/World" instance=ExtResource("5_4mito")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -33.75, 0.75, -5.5)
 motion_mode = 0
 
-[node name="Container" type="Node3D" parent="Layout/CenterLayout/Main/3DView/Viewport/World"]
+[node name="Container" type="Node3D" parent="Layout/CenterLayout/Main/Views/3DView/World"]
 
-[node name="VoxelGI" type="VoxelGI" parent="Layout/CenterLayout/Main/3DView/Viewport/World"]
+[node name="VoxelGI" type="VoxelGI" parent="Layout/CenterLayout/Main/Views/3DView/World"]
 size = Vector3(200, 200, 200)
 data = SubResource("VoxelGIData_eon4g")
 
-[node name="Sidebar" type="VBoxContainer" parent="Layout/CenterLayout/Main/3DView"]
-layout_mode = 1
-anchors_preset = 11
-anchor_left = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 0
-grow_vertical = 2
-
-[node name="TopRight" type="HBoxContainer" parent="Layout/CenterLayout/Main/3DView/Sidebar"]
-layout_mode = 2
-alignment = 2
-
-[node name="TansformGizmo" type="SubViewportContainer" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight"]
-custom_minimum_size = Vector2(100, 100)
-layout_mode = 2
-size_flags_horizontal = 8
-stretch = true
-script = ExtResource("6_4186l")
-
-[node name="World" type="SubViewport" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/TansformGizmo"]
-own_world_3d = true
-transparent_bg = true
-handle_input_locally = false
-size = Vector2i(100, 100)
-render_target_update_mode = 4
-
-[node name="Gizmo" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/TansformGizmo/World" instance=ExtResource("10_p7x03")]
-
-[node name="Camera" type="Camera3D" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/TansformGizmo/World"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.85)
-environment = SubResource("Environment_p5trv")
-fov = 60.0
-
-[node name="Shading" type="VBoxContainer" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight"]
-layout_mode = 2
-
-[node name="WireframeBtn" type="TextureButton" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/Shading"]
-custom_minimum_size = Vector2(30, 30)
-layout_mode = 2
-size_flags_horizontal = 8
-texture_normal = ExtResource("7_w2248")
-ignore_texture_size = true
-stretch_mode = 5
-
-[node name="ShadedBtn" type="TextureButton" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/Shading"]
-custom_minimum_size = Vector2(30, 30)
-layout_mode = 2
-size_flags_horizontal = 8
-texture_normal = ExtResource("8_rngdq")
-ignore_texture_size = true
-stretch_mode = 5
-
-[node name="TexturizedBtn" type="TextureButton" parent="Layout/CenterLayout/Main/3DView/Sidebar/TopRight/Shading"]
-custom_minimum_size = Vector2(30, 30)
-layout_mode = 2
-size_flags_horizontal = 8
-texture_normal = ExtResource("9_6ln17")
-ignore_texture_size = true
-stretch_mode = 5
-
-[node name="Control" type="Control" parent="Layout/CenterLayout/Main/3DView/Sidebar"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="CoordinatesLabel" type="Label" parent="Layout/CenterLayout/Main/3DView/Sidebar"]
-layout_mode = 2
-size_flags_horizontal = 8
-horizontal_alignment = 2
-
-[node name="Crosshair" type="TextureRect" parent="Layout/CenterLayout/Main/3DView"]
+[node name="Crosshair" type="TextureRect" parent="Layout/CenterLayout/Main/Views"]
 visible = false
 texture_filter = 1
 layout_mode = 1
@@ -219,19 +146,88 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -5.0
+offset_left = -5.5
 offset_top = -5.5
-offset_right = 6.0
+offset_right = 5.5
 offset_bottom = 5.5
 grow_horizontal = 2
 grow_vertical = 2
-pivot_offset = Vector2(5, 5)
 texture = ExtResource("11_862x4")
 stretch_mode = 3
 
-[node name="CubemapConverter" type="SubViewport" parent="Layout/CenterLayout/Main/3DView"]
+[node name="Sidebar" type="VBoxContainer" parent="Layout/CenterLayout/Main/Views"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 0
+grow_vertical = 2
 
-[node name="Canvas" type="ColorRect" parent="Layout/CenterLayout/Main/3DView/CubemapConverter"]
+[node name="TopRight" type="HBoxContainer" parent="Layout/CenterLayout/Main/Views/Sidebar"]
+layout_mode = 2
+alignment = 2
+
+[node name="TansformGizmo" type="SubViewportContainer" parent="Layout/CenterLayout/Main/Views/Sidebar/TopRight"]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
+size_flags_horizontal = 8
+stretch = true
+script = ExtResource("6_4186l")
+
+[node name="World" type="SubViewport" parent="Layout/CenterLayout/Main/Views/Sidebar/TopRight/TansformGizmo"]
+own_world_3d = true
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(100, 100)
+render_target_update_mode = 4
+
+[node name="Gizmo" parent="Layout/CenterLayout/Main/Views/Sidebar/TopRight/TansformGizmo/World" instance=ExtResource("10_p7x03")]
+
+[node name="Camera" type="Camera3D" parent="Layout/CenterLayout/Main/Views/Sidebar/TopRight/TansformGizmo/World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.85)
+environment = SubResource("Environment_p5trv")
+fov = 60.0
+
+[node name="Shading" type="VBoxContainer" parent="Layout/CenterLayout/Main/Views/Sidebar/TopRight"]
+layout_mode = 2
+
+[node name="WireframeBtn" type="TextureButton" parent="Layout/CenterLayout/Main/Views/Sidebar/TopRight/Shading"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+size_flags_horizontal = 8
+texture_normal = ExtResource("7_w2248")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="ShadedBtn" type="TextureButton" parent="Layout/CenterLayout/Main/Views/Sidebar/TopRight/Shading"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+size_flags_horizontal = 8
+texture_normal = ExtResource("8_rngdq")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="TexturizedBtn" type="TextureButton" parent="Layout/CenterLayout/Main/Views/Sidebar/TopRight/Shading"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+size_flags_horizontal = 8
+texture_normal = ExtResource("9_6ln17")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Control" type="Control" parent="Layout/CenterLayout/Main/Views/Sidebar"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CoordinatesLabel" type="Label" parent="Layout/CenterLayout/Main/Views/Sidebar"]
+layout_mode = 2
+size_flags_horizontal = 8
+horizontal_alignment = 2
+
+[node name="CubemapConverter" type="SubViewport" parent="Layout/CenterLayout/Main/Views"]
+
+[node name="Canvas" type="ColorRect" parent="Layout/CenterLayout/Main/Views/CubemapConverter"]
 material = ExtResource("18_vri0h")
 offset_right = 40.0
 offset_bottom = 40.0

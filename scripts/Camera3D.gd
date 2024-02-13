@@ -1,7 +1,7 @@
 extends CharacterBody3D
 
 var sensitivity : float = 3
-var base_speed : float = 500
+var base_speed : float = 5
 var gravity = false;
 var localVelocity = Vector3.ZERO;
 
@@ -14,7 +14,7 @@ func _input(event):
     if event is InputEventMouseButton:
         match event.button_index:
             MOUSE_BUTTON_RIGHT:
-                get_node("../../../").setMouseCapture(event.pressed);
+                get_node("/root/App").view3D.setMouseCapture(event.pressed);
     if event.is_action_pressed("Use"):
         var collision = getRaycastHit();
         if collision && collision.collider is Entity:

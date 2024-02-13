@@ -12,7 +12,7 @@ var overlayMesh;
 # Called when the node enters the scene tree for the first time.
 func _ready():
     overlayMesh = MeshInstance3D.new();
-    var world = get_node("/root/App/Layout/CenterLayout/Main/3DView/Viewport/World");
+    var world = get_node("/root/App/Layout/CenterLayout/Main/Views/3DView/World");
     world.add_child(overlayMesh);
     texturePreview = get_node("ScrollContainer/Layout/TexturePreview");
     identifierLabel = get_node("ScrollContainer/Layout/IdentifierLabel");
@@ -20,11 +20,11 @@ func _ready():
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _input(event):
-    if event is InputEventMouseButton && event.pressed:
+    if event is InputEventMouseButton && event.button_index == MOUSE_BUTTON_LEFT && event.pressed:
         inspect();
 
 func inspect():
-    var collision = get_node("/root/App/Layout/CenterLayout/Main/3DView").camera.getRaycastHit();
+    var collision = get_node("/root/App").view3D.camera.getRaycastHit();
     if !collision:
         return;
     var collider = collision.collider;
@@ -56,9 +56,8 @@ func inspectMesh(collision, collider):
                             mdt.get_vertex(mdt.get_face_vertex(face, 2))];
             if (Geometry3D.segment_intersects_triangle(collision.position - collision.normal, collision.position + collision.normal,
                  vertices[0], vertices[1], vertices[2])):
-                var bspFace = bsp.GetTriangleFace(vertices);
-                var faceVertices = bsp.GetFaceTriangleVertices(bspFace);
-                var texInfo = bsp.GetFaceTextureInfo(bspFace);
+                var compFace = bsp.GetFaceFromTriangle(vertices);
+                var faceVertices = compFace.BuildTriFanVertices(bsp.bsp);
                 found = true;
                 var immesh = ImmediateMesh.new();
                 immesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, FaceSelectedMaterial)
@@ -69,7 +68,7 @@ func inspectMesh(collision, collider):
                 # Set UI
                 texturePreview.set_texture(mdt.get_material().albedo_texture);
                 identifierLabel.set_text("...");
-                dataLabel.set_text("vs: %v, vt: %v, sShift: %d, tShift: %d" % [texInfo.vs.GetGDVector3(), texInfo.vt.GetGDVector3(), texInfo.sShift, texInfo.tShift]);
+                #dataLabel.set_text("vs: %v, vt: %v, sShift: %d, tShift: %d" % [texInfo.vs.GetGDVector3(), texInfo.vt.GetGDVector3(), texInfo.sShift, texInfo.tShift]);
         if found:
             break;
 
