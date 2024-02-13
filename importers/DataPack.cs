@@ -26,10 +26,6 @@ public partial class DataPack : Asset
     
     // Utils
     public const float UNIT_SCALE = 1.0f / 32.0f;
-    static public Vector3 ConvertVector(Vector3 rawVector, bool rescale = true)
-    {
-        return new Vector3(-rawVector.Y, rawVector.Z, -rawVector.X) * (rescale ? UNIT_SCALE : 1.0f);
-    }
     static public Vector3 ConvertVectorMDL(Vector3 rawVector)
     {
         return new Vector3(rawVector.X, rawVector.Y, rawVector.Z);
