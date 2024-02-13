@@ -13,9 +13,88 @@ public partial class GoldSrcBSP : DataPack
     private string skyName;
     private Vector3 startOrigin;
 
+    private GEntity[] entities;
     private ComputedFace[] faces;
     private BspFile bsp;
-    
+
+    public partial class GEntity : GodotObject
+    {
+        public Entity bspEntity;
+
+        public GEntity(Entity entity)
+        {
+            bspEntity = entity;
+        }
+        //Passthrough
+        public string ClassName { get { return bspEntity.ClassName; } set { bspEntity.ClassName = value; } }
+        public T Get<T>(string key, T defaultValue)
+        {
+            return bspEntity.Get<T>(key, defaultValue);
+        }
+    }
+
+    public class LightmapBuilder
+    {
+        private const int BytesPerPixel = 3;
+
+        public int Width { get; }
+        public int Height { get; private set; }
+        public System.Drawing.Rectangle FullbrightRectangle { get; }
+
+        private byte[] _data;
+        public byte[] Data => _data;
+
+        private int _currentX;
+        private int _currentY;
+        private int _currentRowHeight;
+
+        public LightmapBuilder(int initialWidth = 256, int initialHeight = 32)
+        {
+            _data = new byte[initialWidth * initialHeight * BytesPerPixel];
+            Width = initialWidth;
+            Height = initialHeight;
+            _currentX = 0;
+            _currentY = 0;
+            _currentRowHeight = 2;
+
+            // (0, 0) is fullbright
+            FullbrightRectangle = Allocate(1, 1, new[] { byte.MaxValue, byte.MaxValue, byte.MaxValue }, 0);
+        }
+
+        public System.Drawing.Rectangle Allocate(int width, int height, byte[] data, int index)
+        {
+            if (_currentX + width > Width) NewRow();
+            if (_currentY + height > Height) Expand();
+
+            for (var i = 0; i < height; i++)
+            {
+                var start = (_currentY + i) * (Width * BytesPerPixel) + _currentX * BytesPerPixel;
+                System.Array.Copy(data, width * i * BytesPerPixel + index, _data, start, width * BytesPerPixel);
+            }
+
+            var x = _currentX;
+            var y = _currentY;
+
+            _currentX += width + 2;
+            _currentRowHeight = Math.Max(_currentRowHeight, height + 2);
+
+            return new System.Drawing.Rectangle(x, y, width, height);
+        }
+
+        private void NewRow()
+        {
+            _currentX = 0;
+            _currentY += _currentRowHeight;
+            _currentRowHeight = 2;
+        }
+
+        private void Expand()
+        {
+            Height *= 2;
+            System.Array.Resize(ref _data, Width * Height * BytesPerPixel);
+        }
+    }
+
     public partial class ComputedFace
     {
         public Face bspFace;
@@ -25,7 +104,9 @@ public partial class GoldSrcBSP : DataPack
 
         public Texture2D lightmapTexture;
 
-        public ComputedFace(BspFile bsp, int faceId)
+        public System.Drawing.Rectangle alloc;
+
+        public ComputedFace(BspFile bsp, int faceId, LightmapBuilder builder)
         {
             bspFace = bsp.Faces[faceId];
             // No lightmap
@@ -34,8 +115,8 @@ public partial class GoldSrcBSP : DataPack
             Vector2[] rawUVs = new Vector2[bspFace.NumEdges];
             faceUVs = new Vector2[bspFace.NumEdges];
             lightmapUVs = new Vector2[bspFace.NumEdges];
-            Vector2 fmins = new Vector2(int.MaxValue, int.MaxValue);
-            Vector2 fmaxs = new Vector2(int.MinValue, int.MinValue);
+            Vector2 fmins = new Vector2(float.MaxValue, float.MaxValue);
+            Vector2 fmaxs = new Vector2(float.MinValue, float.MinValue);
 
             // Generate texture coordinates for face
             TextureInfo texinfo = bsp.Texinfo[bspFace.TextureInfo];
@@ -44,19 +125,19 @@ public partial class GoldSrcBSP : DataPack
             {
                 int surfedge = bsp.Surfedges[bspFace.FirstEdge + edgeN];
                 Edge edge = bsp.Edges[Math.Abs(surfedge)];
-                Vector3 vertex = bsp.Vertices[surfedge >= 0 ? edge.Start : edge.End].ToGodotVector3();
+                Vector3 vertex = bsp.Vertices[surfedge > 0 ? edge.Start : edge.End].ToGodotVector3();
                 rawUVs[edgeN] = new Vector2(
-                    (vertex.Dot(texinfo.S.ToGodotVector3()) + texinfo.S.W),
-                    (vertex.Dot(texinfo.S.ToGodotVector3()) + texinfo.T.W)
+                    vertex.Dot(texinfo.S.ToGodotVector3()) + texinfo.S.W,
+                    vertex.Dot(texinfo.T.ToGodotVector3()) + texinfo.T.W
                 );
                 // For faces, we need to apply texture scale to uvs.
                 faceUVs[edgeN] = new Vector2(rawUVs[edgeN].X / texture.Width, rawUVs[edgeN].Y / texture.Height);
                 lightmapUVs[edgeN] = rawUVs[edgeN].Floor();
                 // We then extract min and max out of the floored values
-                if (lightmapUVs[edgeN].X < fmins.X) fmins.X = lightmapUVs[edgeN].X;
-                if (lightmapUVs[edgeN].X > fmaxs.X) fmaxs.X = lightmapUVs[edgeN].X;
-                if (lightmapUVs[edgeN].Y < fmins.Y) fmins.Y = lightmapUVs[edgeN].Y;
-                if (lightmapUVs[edgeN].Y > fmaxs.Y) fmaxs.Y = lightmapUVs[edgeN].Y;
+                if (rawUVs[edgeN].X < fmins.X) fmins.X = rawUVs[edgeN].X;
+                if (rawUVs[edgeN].X > fmaxs.X) fmaxs.X = rawUVs[edgeN].X;
+                if (rawUVs[edgeN].Y < fmins.Y) fmins.Y = rawUVs[edgeN].Y;
+                if (rawUVs[edgeN].Y > fmaxs.Y) fmaxs.Y = rawUVs[edgeN].Y;
             }
 
             // Compute lightmap size
@@ -65,17 +146,31 @@ public partial class GoldSrcBSP : DataPack
             Vector2I lightmapSize = ((Vector2I)fcmaxs - (Vector2I)ffmins) + new Vector2I(1, 1);
 
             // Load texture from rawLightmap
-            //var lightmapData = new Byte[lightmapSize.X * lightmapSize.Y * 3];
-            //System.Array.Copy(rawLightmap, lightmapOffset, lightmapData, 0, lightmapSize.X * lightmapSize.Y * 3);
-            //Image img = Image.CreateFromData(lightmapSize.X, lightmapSize.Y, false, Image.Format.Rgb8, lightmapData);
-            //lightmapTexture = ImageTexture.CreateFromImage(img);
+            alloc = builder.Allocate(lightmapSize.X, lightmapSize.Y, bsp.Lightmaps.RawLightmapData, bspFace.LightmapOffset);
+            /*var lightmapData = new Byte[lightmapSize.X * lightmapSize.Y * 3];
+            System.Array.Copy(bsp.Lightmaps.RawLightmapData, bspFace.LightmapOffset, lightmapData, 0, lightmapSize.X * lightmapSize.Y * 3);
+            Image img = Image.CreateFromData(lightmapSize.X, lightmapSize.Y, false, Image.Format.Rgb8, lightmapData);
+            lightmapTexture = ImageTexture.CreateFromImage(img);*/
 
             // Compute lightmap UV
             for (int edge = 0; edge < bspFace.NumEdges; edge++)
             {
-                lightmapUVs[edge] = ((rawUVs[edge] - fmins) / (fmaxs - fmins));
+                lightmapUVs[edge] = (rawUVs[edge] - fmins) / (fmaxs - fmins);
             }
+        }
 
+        public void Final(LightmapBuilder builder)
+        {
+            var lightmapWidth = builder.Width;
+            var lightmapHeight = builder.Height;
+            // Compute lightmap UV
+            for (int edge = 0; edge < bspFace.NumEdges; edge++)
+            {
+                lightmapUVs[edge] = new Vector2(
+                    (alloc.X + 0.5f) / lightmapWidth + (lightmapUVs[edge].X * (alloc.Width - 1)) / lightmapWidth,
+                    (alloc.Y + 0.5f) / lightmapHeight + (lightmapUVs[edge].Y * (alloc.Height - 1)) / lightmapHeight
+                );
+            }
         }
     }
 
@@ -83,14 +178,25 @@ public partial class GoldSrcBSP : DataPack
     {
         bsp = new BspFile(fs);
 
-        //base.Import(fs, reader, app);
+        entities = new GEntity[bsp.Entities.Count];
+        for (int ent = 0; ent < bsp.Entities.Count; ent++)
+        {
+            entities[ent] = new GEntity(bsp.Entities[ent]);
+        }
 
         // Build Face UVs & lightmap
+        LightmapBuilder builder = new LightmapBuilder();
         faces = new ComputedFace[bsp.Faces.Count];
         for (int faceId = 0; faceId < bsp.Faces.Count; faceId++)
         {
-            faces[faceId] = new ComputedFace(bsp, faceId);
-            gdTextures[faceId.ToString()] = faces[faceId].lightmapTexture;
+            faces[faceId] = new ComputedFace(bsp, faceId, builder);
+        }
+        var builderTex = ImageTexture.CreateFromImage(Image.CreateFromData(builder.Width, builder.Height, false, Image.Format.Rgb8, builder.Data));
+        gdTextures["Lightmap"] = builderTex;
+        for (int faceId = 0; faceId < faces.Length; faceId++)
+        {
+            faces[faceId].Final(builder);
+            faces[faceId].lightmapTexture = builderTex;
         }
         // Compute dependencies
         Array<Asset> files = (Array<Asset>)app.Get("files");
@@ -170,7 +276,7 @@ public partial class GoldSrcBSP : DataPack
                 if (texinfo.MipTexture < bsp.Textures.Count) {
                     // In older versions of BSP, there is no texture
                     texture = bsp.Textures[(int)texinfo.MipTexture];
-                    faceTextureName = texture.Name;
+                    faceTextureName = texture.Name.ToUpper();
                 }
                 // Create one surfaceTool per texture
                 SurfaceTool surfaceTool;
@@ -183,9 +289,9 @@ public partial class GoldSrcBSP : DataPack
                     {
                         for (int fileId = 0; fileId < files.Count; fileId++)
                         {
-                            if (files[fileId].gdTextures.ContainsKey(texture.Name))
+                            if (files[fileId].gdTextures.ContainsKey(faceTextureName))
                             {
-                                (material as StandardMaterial3D).AlbedoTexture = files[fileId].gdTextures[texture.Name];
+                                (material as StandardMaterial3D).AlbedoTexture = files[fileId].gdTextures[faceTextureName];
                                 (material as StandardMaterial3D).TextureFilter = BaseMaterial3D.TextureFilterEnum.Linear;
                                 break;
                             }
@@ -232,7 +338,7 @@ public partial class GoldSrcBSP : DataPack
                         int trivertIndex = GetSummitVertIndex(-1, i, summit);
                         surfaceTool.SetUV(face.faceUVs[trivertIndex]);
                         surfaceTool.SetUV2(face.lightmapUVs[trivertIndex]);
-                        surfaceTool.SetNormal(face.bspFace.Side != 0 ? -bsp.Planes[face.bspFace.Plane].Normal.ToGodotVector3(): bsp.Planes[face.bspFace.Plane].Normal.ToGodotVector3());
+                        surfaceTool.SetNormal(bsp.Planes[face.bspFace.Plane].Normal.ToGodotVector3());
                         surfaceTool.AddVertex(triFanVertices[trivertIndex]);
                     }
                 }
@@ -268,14 +374,13 @@ public partial class GoldSrcBSP : DataPack
         MeshInstance3D skyMeshI = new MeshInstance3D();
         skyMeshI.Mesh = skyMesh;
         skyNode.AddChild(skyMeshI);
-        //ParseEntities(mapNode, files);
+        ParseEntities(mapNode, files);
         return mapNode;
     }
 
-    /*
     async public void ParseEntities(Node3D mapNode, Array<Asset> files)
     {
-        Dictionary<string, Variant> targets = new Dictionary<string, Variant>();
+        Dictionary<string, GEntity> targets = new Dictionary<string, GEntity>();
         Node3D pointEntitiesNode = new Node3D();
         pointEntitiesNode.Name = "PointEntities";
         mapNode.AddChild(pointEntitiesNode);
@@ -286,45 +391,45 @@ public partial class GoldSrcBSP : DataPack
         pathsNode.Name = "Paths";
         mapNode.AddChild(pathsNode);
         // First pass, setup things
-        foreach (Dictionary<string, string> entity in bsp.Entities)
+        foreach (GEntity entity in entities)
         {
-            if (entity.ContainsKey("CLASSNAME"))
+            if (entity.ClassName != "")
             {
                 // Entity is target, register for later
-                if (entity.ContainsKey("TARGETNAME"))
+                if (entity.Get<string>("TARGETNAME", null) != null)
                 {
                     // Some BSP have duplicate fields... we register once
-                    if (!targets.ContainsKey(entity["TARGETNAME"]))
-                        targets.Add(entity["TARGETNAME"], entity);
+                    if (!targets.ContainsKey(entity.Get<string>("TARGETNAME", null)))
+                        targets.Add(entity.Get<string>("TARGETNAME", null), entity);
                 }
             }
         }
         // Second pass, lets do magic
-        foreach (Dictionary<string, string> entity in entities)
+        foreach (Entity entity in bsp.Entities)
         {
             Node3D entityNode = null;
             Node3D child = null;
             // Entity has a internal use
-            if (entity.ContainsKey("CLASSNAME"))
+            if (entity.ClassName != "")
             {
                 // Contains BSP generic data
-                if (entity["CLASSNAME"] == "WORLDSPAWN")
+                if (entity.ClassName == "WORLDSPAWN")
                 {
-                    if (entity.ContainsKey("SKYNAME"))
+                    if (entity.Get<string>("SKYNAME", null) != null)
                     {
-                        skyName = entity["SKYNAME"];
+                        skyName = entity.Get<string>("SKYNAME", null);
                     }
                 }
                 // 3D Sprite Decal
-                else if (entity["CLASSNAME"] == "INFODECAL")
+                else if (entity.ClassName == "INFODECAL")
                 {
                     entityNode = new Decal();
                     Texture2D tex = null;
                     for (int fileId = 0; fileId < files.Count; fileId++)
                     {
-                        if (files[fileId].gdTextures.ContainsKey(entity["TEXTURE"]))
+                        if (files[fileId].gdTextures.ContainsKey(entity.Get<string>("TEXTURE", null)))
                         {
-                            tex = files[fileId].gdTextures[entity["TEXTURE"]];
+                            tex = files[fileId].gdTextures[entity.Get<string>("TEXTURE", null)];
                             break;
                         }
                     }
@@ -332,17 +437,17 @@ public partial class GoldSrcBSP : DataPack
                     (entityNode as Decal).TextureAlbedo = tex;
                 }
                 // Basic light
-                else if (entity["CLASSNAME"] == "LIGHT")
+                else if (entity.ClassName == "LIGHT")
                 {
                     OmniLight3D light = new OmniLight3D();
-                    string[] color = entity["_LIGHT"].Split(" ");
+                    string[] color = entity.Get<string>("_LIGHT", null).Split(" ");
                     light.LightColor = new Color(float.Parse(color[0]) / 255.0f, float.Parse(color[1]) / 255.0f, float.Parse(color[2]) / 255.0f);
                     child = light;
                 }
                 // Positional SoundEffect
-                else if (entity["CLASSNAME"] == "AMBIENT_GENERIC")
+                else if (entity.ClassName == "AMBIENT_GENERIC")
                 {
-                    string soundName = entity["MESSAGE"].Split("/")[^1].Split(".")[0];
+                    string soundName = entity.Get<string>("MESSAGE", null).Split("/")[^1].Split(".")[0];
                     for (int fileId = 0; fileId < files.Count; fileId++)
                     {
                         if (files[fileId].gdSounds.ContainsKey(soundName))
@@ -360,36 +465,36 @@ public partial class GoldSrcBSP : DataPack
                     }
                 }
                 // Laser / Beam
-                else if (entity["CLASSNAME"] == "ENV_LASER")
+                else if (entity.ClassName == "ENV_LASER")
                 {
                     child = GD.Load<PackedScene>("res://prefabs/Beam.tscn").Instantiate() as Node3D;
-                    string[] vecs = entity["ORIGIN"].Split(" ");
-                    Vector3 origin = ConvertVector(new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])));
-                    child.Call("configure", origin, entity["LASERTARGET"]);
+                    string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
+                    Vector3 origin = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
+                    child.Call("configure", origin, entity.Get<string>("LASERTARGET", null));
                 }
                 // Map entrypoint
-                else if (entity["CLASSNAME"] == "INFO_PLAYER_START")
+                else if (entity.ClassName == "INFO_PLAYER_START")
                 {
-                    string[] vecs = entity["ORIGIN"].Split(" ");
-                    startOrigin = ConvertVector(new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])));
+                    string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
+                    startOrigin = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
                 }
                 // Paths in 3D
-                else if (entity["CLASSNAME"] == "FUNC_TRAIN")
+                else if (entity.ClassName == "FUNC_TRAIN")
                 {
                     Path3D trainPath = new Path3D();
-                    trainPath.Name = entity["TARGETNAME"];
+                    trainPath.Name = entity.Get<string>("TARGETNAME", null);
                     trainPath.Curve = new Curve3D();
                     Array<string> targetStack = new Array<string>();
-                    string targetName = entity["TARGET"];
+                    string targetName = entity.Get<string>("TARGET", null);
                     do
                     {
                         if (!targets.ContainsKey(targetName)) break; // Target is missing
                         targetStack.Add(targetName);
-                        Dictionary<string, string> targetEntity = (Dictionary<string, string>)targets[targetName];
-                        string[] vecs = targetEntity["ORIGIN"].Split(" ");
+                        GEntity targetEntity = targets[targetName];
+                        string[] vecs = targetEntity.Get<string>("ORIGIN", null).Split(" ");
                         Vector3 targetOrigin = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
                         trainPath.Curve.AddPoint(targetOrigin);
-                        targetName = targetEntity.ContainsKey("TARGET") ? targetEntity["TARGET"] : null;
+                        targetName = targetEntity.Get<string>("TARGET", null);
                     } while (!targetStack.Contains(targetName));
                     if (targetStack.Contains(targetName))
                         trainPath.Curve.AddPoint(trainPath.Curve.GetPointPosition(0)); // Make loop
@@ -399,12 +504,12 @@ public partial class GoldSrcBSP : DataPack
                     pathsNode.AddChild(trainPath);
                 }
                 // Entity is not a point
-                else if (entity.ContainsKey("MODEL") && entity["MODEL"].StartsWith("*"))
+                else if (entity.Get<string>("MODEL", "").StartsWith("*"))
                 {
-                    string modelName = "Model" + entity["MODEL"].Replace("*", "");
+                    string modelName = "Model" + entity.Get<string>("MODEL", null).Replace("*", "");
                     entityNode = mapNode.GetNode(modelName) as Node3D;
                     // Set entity as area (non-block)
-                    if (true) // was entity["CLASSNAME"] != "FUNC_BREAKABLE", removed to be able to go through
+                    if (true) // was entity.Get<string>("CLASSNAME"] , null)= "FUNC_BREAKABLE", removed to be able to go through
                     {
                         Area3D replaceNode = new Area3D();
                         replaceNode.Name = modelName;
@@ -429,12 +534,12 @@ public partial class GoldSrcBSP : DataPack
                     // Transfer to modelEntities
                     modelEntitiesNode.AddChild(entityNode);
                     // Set entity type
-                    if (entity["CLASSNAME"] == "FUNC_DOOR")
+                    if (entity.ClassName == "FUNC_DOOR")
                     {
                         entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
                         //entityNode.Call("configureDoor", entity);
                     }
-                    else if (entity["CLASSNAME"] == "FUNC_BUTTON")
+                    else if (entity.ClassName == "FUNC_BUTTON")
                     {
                         entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
                         //entityNode.Call("configureButton", entity);
@@ -444,23 +549,23 @@ public partial class GoldSrcBSP : DataPack
                         entityNode.SetScript(GD.Load<Script>("res://scripts/Entity.gd"));
                     }
                     // Configure base entity class
-                    entityNode.Call("configure", "model", (string)entity["CLASSNAME"], entity, "");
+                    entityNode.Call("configure", "model", (string)entity.Get<string>("CLASSNAME", null), "" /* entity */, "");
                 }
             }
             // Point entities get placed here
-            if (entity.ContainsKey("ORIGIN"))
+            if (entity.Get<string>("ORIGIN", null) != null)
             {
                 if (entityNode == null)
                 {
                     entityNode = GD.Load<PackedScene>("res://prefabs/Entity.tscn").Instantiate() as Node3D;
-                    entityNode.Name = (string)entity["CLASSNAME"];
-                    //entityNode.Call("configure", "point", (string)entity["CLASSNAME"], entity, "");
+                    entityNode.Name = entity.ClassName;
+                    //entityNode.Call("configure", "point", (string)entity.Get<string>("CLASSNAME"], , null)ntity, "");
                     if (child != null)
                     {
                         entityNode.AddChild(child);
                     }
                 }
-                string[] vecs = entity["ORIGIN"].Split(" ");
+                string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
                 entityNode.Position = new GVector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).GetGDVector3();
             }
             // Add gizmo to world
@@ -469,5 +574,5 @@ public partial class GoldSrcBSP : DataPack
                 pointEntitiesNode.AddChild(entityNode);
             }
         }
-    }*/
+    }
 }

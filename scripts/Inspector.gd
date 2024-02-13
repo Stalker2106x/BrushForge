@@ -9,7 +9,7 @@ var selectedOverlay;
 # Called when the node enters the scene tree for the first time.
 func _ready():
     selectedOverlay = MeshInstance3D.new();
-    get_tree().get_root().add_child(selectedOverlay);
+    get_tree().get_root().call_deferred("add_child", selectedOverlay);
     texturePreview = get_node("ScrollContainer/Layout/TexturePreview");
     identifierLabel = get_node("ScrollContainer/Layout/IdentifierLabel");
     dataLabel = get_node("ScrollContainer/Layout/DataLabel");
@@ -33,7 +33,8 @@ func inspect():
             dataText += "%s: %s\n" % [field, collider.data[field]];
         dataLabel.set_text(dataText);
     elif collider is StaticBody3D:
-        inspectMesh(collision, collider);
+        pass;
+        #inspectMesh(collision, collider);
     else:
         identifierLabel.set_text("?");
         dataLabel.set_text("...");
