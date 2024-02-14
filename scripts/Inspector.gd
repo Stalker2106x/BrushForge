@@ -6,6 +6,7 @@ const NoTexture = preload("res://assets/Missing.png");
 var texturePreview;
 var identifierLabel;
 var dataLabel;
+var actionButton;
 
 var overlayMesh;
 
@@ -17,6 +18,7 @@ func _ready():
     texturePreview = get_node("ScrollContainer/Layout/TexturePreview");
     identifierLabel = get_node("ScrollContainer/Layout/IdentifierLabel");
     dataLabel = get_node("ScrollContainer/Layout/DataLabel");
+    actionButton = get_node("ScrollContainer/Layout/ActionButton");
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _input(event):
@@ -36,6 +38,11 @@ func inspect():
         for field in fields.keys():
             dataText += "%s: %s\n" % [field, fields[field]];
         dataLabel.set_text(dataText);
+        if collider.identifier == "trigger_changelevel":
+            #if actionButton.is_connected("pressed", Callable(get_node("/root/App").view3D, "loadChangelevel")):
+            #    actionButton.disconnect("pressed", Callable(get_node("/root/App").view3D, "loadChangelevel"));
+            actionButton.connect("pressed", Callable(self, "loadChangelevel").bind(collider.get_position(), fields["map"]))
+            actionButton.disabled = false;
     elif collider is StaticBody3D:
         inspectMesh(collision, collider);
     else:
@@ -57,6 +64,7 @@ func inspectMesh(collision, collider):
             if (Geometry3D.segment_intersects_triangle(collision.position - collision.normal, collision.position + collision.normal,
                  vertices[0], vertices[1], vertices[2])):
                 var compFace = bsp.GetFaceFromTriangle(vertices[0], vertices[1], vertices[2]);
+                return; #skip
                 var faceVertices = compFace.BuildTriFanVertices(bsp.bsp);
                 found = true;
                 var immesh = ImmediateMesh.new();
@@ -72,3 +80,5 @@ func inspectMesh(collision, collider):
         if found:
             break;
 
+func loadChangeLevel(pos, map):
+    get_node("/root/App").view3D.loadNextLevel(pos, map)

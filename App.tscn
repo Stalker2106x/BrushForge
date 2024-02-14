@@ -266,6 +266,10 @@ layout_mode = 2
 layout_mode = 2
 fit_content = true
 
+[node name="ActionButton" type="Button" parent="Layout/CenterLayout/TabContainer/Inspector/ScrollContainer/Layout"]
+layout_mode = 2
+text = "Activate"
+
 [node name="Files" type="VBoxContainer" parent="Layout/CenterLayout/TabContainer"]
 visible = false
 layout_mode = 2

@@ -76,6 +76,7 @@ func setShading(shading_):
     reloadLevel();
 
 func applySettings():
+    return;
     get_node("World/Container/Map/Skybox").visible = !settings.render.skybox;
     var skyMat = camera.get_node("Camera").environment.sky.sky_material;
     if settings.render.skybox:
@@ -123,23 +124,38 @@ func reloadLevel():
         unload();
     var files = get_node("/root/App").files;
     var mapNode = files[currentLevelFileId].BuildGDLevel("", shading, files);
+    mapNode.name = str(currentLevelFileId);
     if (mapNode == null):
         return;
     worldContainer.add_child(mapNode);
     applySettings();
-    #get_node("Viewport/World/VoxelGI").bake(get_node("Viewport/World/Container"));
 
-func loadNextMap():
-    var levels = getConnectedLevels();
-    print(levels);
+func loadChangeLevel(pos, map):
+    var files = get_node("/root/App").files;
+    var current = files[currentLevelFileId];
+    await get_node("/root/App").openAsset(current.path.replace(current.GetFileName(), map+".bsp"), null);
+    var newFileId = files.size()-1;
+    var mapNode = files[newFileId].BuildGDLevel("", shading, files);
+    mapNode.name = str(newFileId);
+    if (mapNode == null):
+        return;
+    worldContainer.add_child(mapNode);
+    var newConnections = getLevelConnections(newFileId);
+    for newConn in newConnections:
+        if newConn.map == map:
+            var levelOffset = newConn.coords - pos;
+            mapNode.set_position(levelOffset);
 
-func getConnectedLevels():
+func getLevelConnections(fileId):
     var levelNames = [];
-    for entity in get_node("World/Container/Map").get_children():
+    for entity in get_node("World/Container/%d" % fileId).get_children():
         if !entity is Entity:
             continue;
         if entity.identifier == "TRIGGER_CHANGELEVEL":
-            levelNames.push_back(entity.getFields()["map"]);
+            levelNames.push_back({
+                "map": entity.getFields()["map"],
+                "coords": entity.get_position()
+            });
     return levelNames;
 
 func unload(clearCache = false):

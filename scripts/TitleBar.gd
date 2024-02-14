@@ -37,7 +37,7 @@ func fileButtonPressed(idx):
     if idx == 2:
         get_node("/root/App/PreferencesDialog").set_visible(true);
     if idx == 3:
-        get_node("/root/App").view3D.loadNextMap();
+        get_node("/root/App").view3D.loadLevelConnections();
 
 func viewButtonPressed(idx):
     var enabled = !viewDropdown.is_item_checked(idx)

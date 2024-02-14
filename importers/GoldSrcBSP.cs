@@ -421,13 +421,12 @@ public partial class GoldSrcBSP : DataPack
         {
             if (entity.ClassName != "")
             {
-                entity.ClassName = entity.ClassName.ToUpper();
                 // Entity is target, register for later
-                if (entity.Get<string>("TARGETNAME", null) != null)
+                if (entity.Get<string>("targetname", null) != null)
                 {
                     // Some BSP have duplicate fields... we register once
-                    if (!targets.ContainsKey(entity.Get<string>("TARGETNAME", null)))
-                        targets.Add(entity.Get<string>("TARGETNAME", null), entity);
+                    if (!targets.ContainsKey(entity.Get<string>("targetname", null)))
+                        targets.Add(entity.Get<string>("targetname", null), entity);
                 }
             }
         }
@@ -440,23 +439,23 @@ public partial class GoldSrcBSP : DataPack
             if (entity.ClassName != "")
             {
                 // Contains BSP generic data
-                if (entity.ClassName == "WORLDSPAWN")
+                if (entity.ClassName == "worldspawn")
                 {
-                    if (entity.Get<string>("SKYNAME", null) != null)
+                    if (entity.Get<string>("skyname", null) != null)
                     {
-                        skyName = entity.Get<string>("SKYNAME", null);
+                        skyName = entity.Get<string>("skyname", null);
                     }
                 }
                 // 3D Sprite Decal
-                else if (entity.ClassName == "INFODECAL")
+                else if (entity.ClassName == "infodecal")
                 {
                     entityNode = new Decal();
                     Texture2D tex = null;
                     for (int fileId = 0; fileId < files.Count; fileId++)
                     {
-                        if (files[fileId].gdTextures.ContainsKey(entity.Get<string>("TEXTURE", null)))
+                        if (files[fileId].gdTextures.ContainsKey(entity.Get<string>("texture", null)))
                         {
-                            tex = files[fileId].gdTextures[entity.Get<string>("TEXTURE", null)];
+                            tex = files[fileId].gdTextures[entity.Get<string>("texture", null)];
                             break;
                         }
                     }
@@ -464,17 +463,19 @@ public partial class GoldSrcBSP : DataPack
                     (entityNode as Decal).TextureAlbedo = tex;
                 }
                 // Basic light
-                else if (entity.ClassName == "LIGHT")
+                else if (entity.ClassName == "light")
                 {
                     OmniLight3D light = new OmniLight3D();
-                    string[] color = entity.Get<string>("_LIGHT", null).Split(" ");
-                    light.LightColor = new Color(float.Parse(color[0]) / 255.0f, float.Parse(color[1]) / 255.0f, float.Parse(color[2]) / 255.0f);
+                    string[] color = entity.Get<string>("_light", null).Trim().Split(" ");
+                    if (color.Length < 4)
+                        continue;
+                    light.LightColor = new Color(int.Parse(color[0]) / 255.0f, int.Parse(color[1]) / 255.0f, int.Parse(color[2]) / 255.0f);
                     child = light;
                 }
                 // Positional SoundEffect
-                else if (entity.ClassName == "AMBIENT_GENERIC")
+                else if (entity.ClassName == "ambient_generic")
                 {
-                    string soundName = entity.Get<string>("MESSAGE", null).Split("/")[^1].Split(".")[0];
+                    string soundName = entity.Get<string>("message", null).Split("/")[^1].Split(".")[0];
                     for (int fileId = 0; fileId < files.Count; fileId++)
                     {
                         if (files[fileId].gdSounds.ContainsKey(soundName))
@@ -492,27 +493,27 @@ public partial class GoldSrcBSP : DataPack
                     }
                 }
                 // Laser / Beam
-                else if (entity.ClassName == "ENV_LASER")
+                else if (entity.ClassName == "env_laser")
                 {
                     child = GD.Load<PackedScene>("res://prefabs/Beam.tscn").Instantiate() as Node3D;
-                    string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
+                    string[] vecs = entity.Get<string>("origin", null).Split(" ");
                     Vector3 origin = new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).ToSGodotVector3();
-                    child.Call("configure", origin, entity.Get<string>("LASERTARGET", null));
+                    child.Call("configure", origin, entity.Get<string>("lasertarget", null));
                 }
                 // Map entrypoint
-                else if (entity.ClassName == "INFO_PLAYER_START")
+                else if (entity.ClassName == "info_player_start")
                 {
-                    string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
+                    string[] vecs = entity.Get<string>("origin", null).Split(" ");
                     startOrigin = new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).ToSGodotVector3();
                 }
                 // Paths in 3D
-                else if (entity.ClassName == "FUNC_TRAIN")
+                else if (entity.ClassName == "func_train")
                 {
                     Path3D trainPath = new Path3D();
-                    trainPath.Name = entity.Get<string>("TARGETNAME", null);
+                    trainPath.Name = entity.Get<string>("targetname", null);
                     trainPath.Curve = new Curve3D();
                     Array<string> targetStack = new Array<string>();
-                    string targetName = entity.Get<string>("TARGET", null);
+                    string targetName = entity.Get<string>("target", null);
                     do
                     {
                         if (!targets.ContainsKey(targetName)) break; // Target is missing
@@ -521,7 +522,7 @@ public partial class GoldSrcBSP : DataPack
                         string[] vecs = targetEntity.Get<string>("ORIGIN", null).Split(" ");
                         Vector3 targetOrigin = new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).ToSGodotVector3();
                         trainPath.Curve.AddPoint(targetOrigin);
-                        targetName = targetEntity.Get<string>("TARGET", null);
+                        targetName = targetEntity.Get<string>("target", null);
                     } while (!targetStack.Contains(targetName));
                     if (targetStack.Contains(targetName))
                         trainPath.Curve.AddPoint(trainPath.Curve.GetPointPosition(0)); // Make loop
@@ -531,9 +532,9 @@ public partial class GoldSrcBSP : DataPack
                     pathsNode.AddChild(trainPath);
                 }
                 // Entity is not a point
-                else if (entity.Get<string>("MODEL", "").StartsWith("*"))
+                else if (entity.Get<string>("model", "").StartsWith("*"))
                 {
-                    string modelName = "Model" + entity.Get<string>("MODEL", null).Replace("*", "");
+                    string modelName = "Model" + entity.Get<string>("model", null).Replace("*", "");
                     entityNode = mapNode.GetNode(modelName) as Node3D;
                     // Set entity as area (non-block)
                     if (true) // was entity.Get<string>("CLASSNAME"] , null)= "FUNC_BREAKABLE", removed to be able to go through
@@ -551,12 +552,12 @@ public partial class GoldSrcBSP : DataPack
                     // Transfer to modelEntities
                     mapNode.AddChild(entityNode);
                     // Set entity type
-                    if (entity.ClassName == "FUNC_DOOR")
+                    if (entity.ClassName == "func_door")
                     {
                         entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
                         //entityNode.Call("configureDoor", entity);
                     }
-                    else if (entity.ClassName == "FUNC_BUTTON")
+                    else if (entity.ClassName == "func_button")
                     {
                         entityNode.SetScript(GD.Load<Script>("res://scripts/entities/Door.gd"));
                         //entityNode.Call("configureButton", entity);
@@ -566,24 +567,24 @@ public partial class GoldSrcBSP : DataPack
                         entityNode.SetScript(GD.Load<Script>("res://scripts/Entity.gd"));
                     }
                     // Configure base entity class
-                    entityNode.Call("configure", "model", (string)entity.Get<string>("CLASSNAME", null), entity, "");
+                    entityNode.Call("configure", "model", entity.ClassName, entity, "");
                 }
             }
             // Point entities get placed here
-            if (entity.Get<string>("ORIGIN", null) != null)
+            if (entity.Get<string>("origin", null) != null)
             {
                 if (entityNode == null)
                 {
                     entityNode = GD.Load<PackedScene>("res://prefabs/Entity.tscn").Instantiate() as Node3D;
                     entityNode.Name = entity.ClassName;
-                    entityNode.Call("configure", "point", (string)entity.ClassName, entity, "");
+                    entityNode.Call("configure", "point", entity.ClassName, entity, "");
                     if (child != null)
                     {
                         entityNode.AddChild(child);
                     }
                     mapNode.AddChild(entityNode);
                 }
-                string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
+                string[] vecs = entity.Get<string>("origin", null).Split(" ");
                 entityNode.Position = new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).ToSGodotVector3();
             }
         }
