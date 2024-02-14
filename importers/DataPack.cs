@@ -1,7 +1,9 @@
 using Godot;
+using Godot.Collections;
 using System;
 using System.IO;
 using System.Reflection.PortableExecutable;
+using static GoldSrcBSP;
 
 public partial class DataPack : Asset
 {

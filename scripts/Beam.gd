@@ -4,6 +4,7 @@ class_name Beam
 var enabled;
 
 var targetName;
+var targetPath;
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
@@ -12,12 +13,12 @@ func _ready():
 func configure(origin : Vector3, targetName_ : String):
     set_position(origin);
     targetName = targetName_;
+    targetPath = get_node("/root/App/Layout/CenterLayout/Main/3DView/Viewport/World/Container/Map/Paths/%s/Wagon" % targetName);
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta):
-    var path = get_node("/root/App/Layout/CenterLayout/Main/3DView/Viewport/World/Container/Map/Paths/%s/Wagon" % targetName);
-    if enabled && path:
-        line(get_position(), path.get_position());
+    if enabled && targetPath:
+        line(get_position(), targetPath.get_position());
 
 func line(pos1: Vector3, pos2: Vector3, color = Color.RED):
     var mesh_instance := MeshInstance3D.new()

@@ -9,10 +9,11 @@ var worldContainer;
 var crosshair;
 
 var currentLevelMetadata;
-var currentLevelFile;
+var currentLevelFileId;
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
+    currentLevelFileId = null;
     shading = "texturized";
     settings = {
         "render": {
@@ -79,7 +80,7 @@ func applySettings():
     var skyMat = camera.get_node("Camera").environment.sky.sky_material;
     if settings.render.skybox:
         var files = get_node("/root/App").files;
-        var cubemapTextures = currentLevelFile.GetSkyCubemapTextures(files);
+        var cubemapTextures = files[currentLevelFileId].GetSkyCubemapTextures(files);
         skyMat.set_shader_parameter("front", cubemapTextures[0]);
         skyMat.set_shader_parameter("left", cubemapTextures[1]);
         skyMat.set_shader_parameter("back", cubemapTextures[2]);
@@ -94,7 +95,9 @@ func applySettings():
         skyMat.set_shader_parameter("right", blackPixel);
         skyMat.set_shader_parameter("top", blackPixel);
         skyMat.set_shader_parameter("bottom", blackPixel);
-    for entity in get_node("World/Container/Map/PointEntities").get_children():
+    for entity in get_node("World/Container/Map").get_children():
+        if !entity is Entity:
+            continue;
         for child in entity.get_children():
             if child is OmniLight3D:
                 child.visible = settings.render.lights;
@@ -102,8 +105,8 @@ func applySettings():
                 child.enabled = settings.render.beams;
     for path in get_node("World/Container/Map/Paths").get_children():
         path.get_node("Wagon").enabled = settings.entities.runFuncTrain;
-    get_node("World/Container/Map/PointEntities").visible = settings.render.pointEntities;
-    get_node("World/Container/Map/ModelEntities").visible = settings.render.modelEntities;
+    #get_node("World/Container/Map/PointEntities").visible = settings.render.pointEntities;
+    #get_node("World/Container/Map/ModelEntities").visible = settings.render.modelEntities;
     camera.get_node("CameraCollider").disabled = !settings.camera.collisions;
     camera.gravity = settings.camera.gravity;
 
@@ -114,30 +117,44 @@ func getLevelMetadata():
     return currentLevelMetadata;
 
 func reloadLevel():
-    if !currentLevelFile:
+    if currentLevelFileId == null:
         return;
     if hasLevelLoaded():
         unload();
     var files = get_node("/root/App").files;
-    var mapNode = currentLevelFile.BuildGDLevel("", shading, files);
+    var mapNode = files[currentLevelFileId].BuildGDLevel("", shading, files);
     if (mapNode == null):
         return;
     worldContainer.add_child(mapNode);
     applySettings();
     #get_node("Viewport/World/VoxelGI").bake(get_node("Viewport/World/Container"));
 
+func loadNextMap():
+    var levels = getConnectedLevels();
+    print(levels);
+
+func getConnectedLevels():
+    var levelNames = [];
+    for entity in get_node("World/Container/Map").get_children():
+        if !entity is Entity:
+            continue;
+        if entity.identifier == "TRIGGER_CHANGELEVEL":
+            levelNames.push_back(entity.getFields()["map"]);
+    return levelNames;
+
 func unload(clearCache = false):
     for child in worldContainer.get_children():
         child.name = child.name+"_d";
         child.queue_free();
     if clearCache:
-        currentLevelFile = null;
+        currentLevelFileId = null;
         currentLevelMetadata = null;
 
 func loadLevel(levelMetadata):
     currentLevelMetadata = levelMetadata;
-    currentLevelFile = get_node("/root/App").files[levelMetadata.fileId];
+    currentLevelFileId = levelMetadata.fileId;
     reloadLevel();
-    camera.set_position(currentLevelFile.GetLevelStart());
+    var files = get_node("/root/App").files;
+    camera.set_position(files[currentLevelFileId].GetLevelStart());
     camera.set_rotation(Vector3(0,0,0));
     

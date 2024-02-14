@@ -1,7 +1,5 @@
 extends MenuBar
 
-var view3D;
-
 var fileDropdown;
 var viewDropdown;
 var aboutDropdown;
@@ -10,7 +8,6 @@ var settingsMap;
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
-    view3D = get_node("../../3DView");
     # Bindings
     fileDropdown = get_node("File");
     fileDropdown.connect("index_pressed", Callable(self, "fileButtonPressed"));
@@ -37,13 +34,15 @@ func fileButtonPressed(idx):
         get_node("/root/App/FileDialog").set_visible(true);
     if idx == 1:
         get_node("/root/App/FolderDialog").set_visible(true);
-    if idx == 1:
+    if idx == 2:
         get_node("/root/App/PreferencesDialog").set_visible(true);
+    if idx == 3:
+        get_node("/root/App").view3D.loadNextMap();
 
 func viewButtonPressed(idx):
     var enabled = !viewDropdown.is_item_checked(idx)
     var keys = settingsMap[idx].split(";");
-    view3D.setSetting(keys[0], keys[1], enabled);
+    get_node("/root/App").view3D.setSetting(keys[0], keys[1], enabled);
     viewDropdown.set_item_checked(idx, enabled);
 
 func aboutButtonPressed(idx):

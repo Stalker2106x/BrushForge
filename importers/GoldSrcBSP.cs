@@ -15,7 +15,7 @@ public partial class GoldSrcBSP : DataPack
 
     private GEntity[] entities;
     private ComputedFace[] faces;
-    private BspFile bsp;
+    public BspFile bsp;
 
     public partial class GEntity : GodotObject
     {
@@ -25,6 +25,15 @@ public partial class GoldSrcBSP : DataPack
         {
             bspEntity = entity;
         }
+
+        public Dictionary<string, Variant> GetFields()
+        {
+            Dictionary<string, Variant> dict = new Dictionary<string, Variant>();
+            foreach (System.Collections.Generic.KeyValuePair<string, string> entry in bspEntity.KeyValues)
+                dict[entry.Key] = entry.Value;
+            return dict;
+        }
+
         //Passthrough
         public string ClassName { get { return bspEntity.ClassName; } set { bspEntity.ClassName = value; } }
         public T Get<T>(string key, T defaultValue)
@@ -95,7 +104,7 @@ public partial class GoldSrcBSP : DataPack
         }
     }
 
-    public partial class ComputedFace
+    public partial class ComputedFace : GodotObject
     {
         public const float UNIT_SCALE = 1.0f / 32.0f;
 
@@ -190,7 +199,7 @@ public partial class GoldSrcBSP : DataPack
         }
     }
 
-    public ComputedFace GetFaceFromTriangle(Array<Vector3> summits)
+    public ComputedFace GetFaceFromTriangle(Vector3 v1, Vector3 v2, Vector3 v3)
     {
         foreach (ComputedFace face in faces)
         {
@@ -200,7 +209,7 @@ public partial class GoldSrcBSP : DataPack
                 int surfedge = bsp.Surfedges[face.bspFace.FirstEdge + edgeN];
                 Edge edge = bsp.Edges[Math.Abs(surfedge)];
                 Vector3 vertex = bsp.Vertices[surfedge > 0 ? edge.Start : edge.End].ToGodotVector3();
-                if (vertex.IsEqualApprox(summits[0]) || vertex.IsEqualApprox(summits[1]) || vertex.IsEqualApprox(summits[2]))
+                if (vertex.IsEqualApprox(v1) || vertex.IsEqualApprox(v2) || vertex.IsEqualApprox(v3))
                     found += 1;
             }
             if (found == 3)
@@ -404,12 +413,6 @@ public partial class GoldSrcBSP : DataPack
     public void ParseEntities(Node3D mapNode, Array<Asset> files)
     {
         Dictionary<string, GEntity> targets = new Dictionary<string, GEntity>();
-        Node3D pointEntitiesNode = new Node3D();
-        pointEntitiesNode.Name = "PointEntities";
-        mapNode.AddChild(pointEntitiesNode);
-        Node3D modelEntitiesNode = new Node3D();
-        modelEntitiesNode.Name = "ModelEntities";
-        mapNode.AddChild(modelEntitiesNode);
         Node3D pathsNode = new Node3D();
         pathsNode.Name = "Paths";
         mapNode.AddChild(pathsNode);
@@ -418,6 +421,7 @@ public partial class GoldSrcBSP : DataPack
         {
             if (entity.ClassName != "")
             {
+                entity.ClassName = entity.ClassName.ToUpper();
                 // Entity is target, register for later
                 if (entity.Get<string>("TARGETNAME", null) != null)
                 {
@@ -534,15 +538,6 @@ public partial class GoldSrcBSP : DataPack
                     // Set entity as area (non-block)
                     if (true) // was entity.Get<string>("CLASSNAME"] , null)= "FUNC_BREAKABLE", removed to be able to go through
                     {
-                        Area3D replaceNode = new Area3D();
-                        replaceNode.Name = modelName;
-                        foreach (Node3D eChild in entityNode.GetChildren())
-                        {
-                            entityNode.RemoveChild(eChild);
-                            replaceNode.AddChild(eChild);
-                        }
-                        entityNode.QueueFree(); // Release unnecessary rigidbody
-                        entityNode = replaceNode;
                         MeshInstance3D modelMesh = entityNode.GetNode("Mesh") as MeshInstance3D;
                         int surfaceCount = modelMesh.GetSurfaceOverrideMaterialCount();
                         for (int surface = 0; surface < surfaceCount; surface++)
@@ -550,12 +545,11 @@ public partial class GoldSrcBSP : DataPack
                             BaseMaterial3D originalMat = modelMesh.GetActiveMaterial(surface) as BaseMaterial3D;
                             originalMat.Transparency = BaseMaterial3D.TransparencyEnum.AlphaDepthPrePass;
                             originalMat.AlbedoColor = new Color(1.0f, 1.0f, 1.0f, 0.5f);
-                            //shaderMat.SetShaderParameter("albedo", originalMat.AlbedoTexture);
                             modelMesh.SetSurfaceOverrideMaterial(surface, originalMat);
                         }
                     }
                     // Transfer to modelEntities
-                    modelEntitiesNode.AddChild(entityNode);
+                    mapNode.AddChild(entityNode);
                     // Set entity type
                     if (entity.ClassName == "FUNC_DOOR")
                     {
@@ -572,7 +566,7 @@ public partial class GoldSrcBSP : DataPack
                         entityNode.SetScript(GD.Load<Script>("res://scripts/Entity.gd"));
                     }
                     // Configure base entity class
-                    entityNode.Call("configure", "model", (string)entity.Get<string>("CLASSNAME", null), "" /* entity */, "");
+                    entityNode.Call("configure", "model", (string)entity.Get<string>("CLASSNAME", null), entity, "");
                 }
             }
             // Point entities get placed here
@@ -587,14 +581,10 @@ public partial class GoldSrcBSP : DataPack
                     {
                         entityNode.AddChild(child);
                     }
+                    mapNode.AddChild(entityNode);
                 }
                 string[] vecs = entity.Get<string>("ORIGIN", null).Split(" ");
                 entityNode.Position = new Vector3(float.Parse(vecs[0]), float.Parse(vecs[1]), float.Parse(vecs[2])).ToSGodotVector3();
-            }
-            // Add gizmo to world
-            if (entityNode != null)
-            {
-                pointEntitiesNode.AddChild(entityNode);
             }
         }
     }

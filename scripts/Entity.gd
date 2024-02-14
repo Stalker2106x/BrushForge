@@ -5,7 +5,7 @@ var type;
 var identifier;
 var data;
 
-func configure(type_ : String, identifier_ : String, data_ : Dictionary, customTextureName : String):
+func configure(type_ : String, identifier_ : String, data_, customTextureName : String):
     identifier = identifier_;
     data = data_;
     var gizmo = get_node_or_null("Gizmo");
@@ -17,6 +17,9 @@ func configure(type_ : String, identifier_ : String, data_ : Dictionary, customT
                 if file.gdTextures.has(customTextureName):
                     get_node("Gizmo/Icon").set_texture(file.gdTextures[customTextureName]);
                     break;
+
+func getFields():
+    return data.GetFields();
 
 func use():
     pass;

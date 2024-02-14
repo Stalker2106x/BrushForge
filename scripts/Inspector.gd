@@ -29,13 +29,12 @@ func inspect():
         return;
     var collider = collision.collider;
     if collider is Entity:
-        if !collider.data:
-            return; #Unloaded map
         identifierLabel.set_text(collider.identifier);
         texturePreview.set_texture(NoTexture);
         var dataText = "";
-        for field in collider.data.keys():
-            dataText += "%s: %s\n" % [field, collider.data[field]];
+        var fields = collider.getFields();
+        for field in fields.keys():
+            dataText += "%s: %s\n" % [field, fields[field]];
         dataLabel.set_text(dataText);
     elif collider is StaticBody3D:
         inspectMesh(collision, collider);
@@ -46,7 +45,8 @@ func inspect():
 func inspectMesh(collision, collider):
     var mdt = MeshDataTool.new();
     var mesh = collider.get_node("Mesh").mesh;
-    var bsp = get_node("/root/App").view3D.currentLevelFile;
+    var files = get_node("/root/App").files;
+    var bsp = files[get_node("/root/App").view3D.currentLevelFileId];
     for surface in range(0, mesh.get_surface_count()):
         var found = false;
         mdt.create_from_surface(mesh, surface);
@@ -56,7 +56,7 @@ func inspectMesh(collision, collider):
                             mdt.get_vertex(mdt.get_face_vertex(face, 2))];
             if (Geometry3D.segment_intersects_triangle(collision.position - collision.normal, collision.position + collision.normal,
                  vertices[0], vertices[1], vertices[2])):
-                var compFace = bsp.GetFaceFromTriangle(vertices);
+                var compFace = bsp.GetFaceFromTriangle(vertices[0], vertices[1], vertices[2]);
                 var faceVertices = compFace.BuildTriFanVertices(bsp.bsp);
                 found = true;
                 var immesh = ImmediateMesh.new();

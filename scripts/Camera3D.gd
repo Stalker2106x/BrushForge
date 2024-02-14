@@ -53,6 +53,6 @@ func getRaycastHit():
     var space = get_world_3d().direct_space_state
     var query = PhysicsRayQueryParameters3D.create(global_position,
             global_position - global_transform.basis.z * 100)
-    query.collide_with_areas = true; # Need to collide with triggers
+    query.set_collide_with_areas(true); # Need to collide with triggers
     query.set_collision_mask(3); # 1 & 2nd layers
     return space.intersect_ray(query);
